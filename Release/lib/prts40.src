@@ -1,0 +1,3889 @@
+!<arch>
+compt40.h/      925425274   0     0     0       12082     `
+/****************************************************************************/
+/* compt40.h V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#ifndef  _COMPT40
+#define  _COMPT40
+
+#ifndef  _SIZE_T
+#define  _SIZE_T
+typedef  unsigned          size_t;
+#endif
+
+#ifndef  gcontrol
+#define  gcontrol          _gctrl._intval
+#endif
+#ifndef  gcontrol_bit
+#define  gcontrol_bit      _gctrl._bitval
+#endif
+
+#if defined(_INLINE)
+#define  __INLINE          static inline
+#else
+#define  __INLINE
+#endif
+
+#define  RECEIVE_LENGTH    0x0C00049
+#define  RECEIVE_DATA      0x0C40045
+#define  SEND_LENGTH       0x0C00089
+#define  SEND_DATA         0x0C40085
+#define  COMPORT_BASE      0x0100040
+#define  CP_IN_BASE        0x0100041
+#define  CP_OUT_BASE       0x0100042
+
+/*****************************************************************************/
+/* MACRO DEFINITIONS FOR COMMUNICATION PORT BASE ADDRESS                     */
+/*****************************************************************************/
+#define  COMPORT_ADDR(A)        ((COMPORT_REG *)(COMPORT_BASE + (A << 4)))
+#define  COMPORT_IN_ADDR(B)     ((long *)(CP_IN_BASE   + (B << 4)))
+#define  COMPORT_OUT_ADDR(C)    ((long *)(CP_OUT_BASE  + (C << 4)))
+
+/*****************************************************************************/
+/* UNION AND STRUCTURE DEFINITION FOR COMM PORT GLOBAL CONTROL REGISTER      */
+/*****************************************************************************/
+typedef  union {
+       struct {
+         unsigned int   r_01              :2;   /* Reserved bits 0 & 1       */
+         volatile unsigned int  port_dir  :1;   /* Comm port direction bit   */
+         unsigned int   ich               :1;   /* Input fifo halt           */
+         unsigned int   och               :1;   /* Output fifo halt          */
+         volatile unsigned int  out_level :4;   /* Output fifo level         */
+         volatile unsigned int  in_level  :4;   /* Input fifo level          */
+         unsigned int   r_rest            :19;  /* Reserved bits             */
+       } _bitval;                               /* Comm port ctrl bits field */
+       volatile unsigned long _intval;          /* Comm port control word    */
+      } COMPORT_CONTROL;
+
+/*****************************************************************************/
+/* STRUCTURE DEFINITION COMMUNICATION PORT CONTROL REGISTERS                 */
+/*****************************************************************************/
+typedef  struct {
+         COMPORT_CONTROL  _gctrl;               /* Comm port control reg     */
+         volatile unsigned int    in_port;      /* Comm port input register  */
+         unsigned int     out_port;             /* Comm port output register */
+         unsigned int     reserved1[13];        /* Unused reserved mem. map  */
+       } COMPORT_REG;
+
+/*****************************************************************************/
+/* GLOBAL MEMORY DEFINITION                                                  */
+/*****************************************************************************/
+extern   size_t msg_size[];               /* Global memory for message size  */
+
+/*****************************************************************************/
+/* FUNCTION DEFINITIONS                                                      */
+/*****************************************************************************/
+void          pack_byte(void *, void *, size_t);
+size_t        unpack_byte(void volatile *, void *, size_t);
+void          pack_halfword(void *, void *, size_t);
+size_t        unpack_halfword(void volatile *, void *, size_t);
+
+__INLINE long in_word(int ch_no);
+size_t        in_msg(int ch_no, void *message, int step);
+size_t        in_msg8(int ch_no, void *message);
+size_t        in_msg16(int ch_no, void *message);
+void          receive_msg(int ch_no, void *message, int step);
+
+__INLINE void out_word(long word_value, int ch_no);
+void          out_msg(int ch_no, void *message, size_t message_size, int step);
+__INLINE void out_msg8(int ch_no, void *message, size_t message_size);
+__INLINE void out_msg16(int ch_no, void *message, size_t message_size);
+void          send_msg(int ch_no, void *message, size_t message_size, int step);
+
+__INLINE int  cp_in_level(int ch_no);
+__INLINE void cp_in_halt(int ch_no);
+__INLINE void cp_in_release(int ch_no);
+__INLINE int  cp_out_level(int ch_no);
+__INLINE void cp_out_halt(int ch_no);
+__INLINE void cp_out_release(int ch_no);
+
+#if defined(_INLINE)
+/*****************************************************************************/
+/*  in_word()                                                                */
+/*****************************************************************************/
+static inline long in_word(int ch_no)
+{
+    /*-----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER AND SEND OUT DATA             */
+    /*-----------------------------------------------------------------------*/
+    volatile COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* COMM PORT POINTER */
+    return (cp_ptr->in_port);
+}
+
+/*****************************************************************************/
+/*  out_word()                                                               */
+/*****************************************************************************/
+static inline void out_word(long word_value, int ch_no)
+{
+    /*-----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER AND SEND OUT DATA             */
+    /*-----------------------------------------------------------------------*/
+    volatile COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* COMM PORT POINTER */
+    cp_ptr->out_port = word_value;
+}
+
+/****************************************************************************/
+/*  out_msg8()                                                              */
+/****************************************************************************/
+static inline void out_msg8(int ch_no, void *message, size_t message_size)
+{
+    /*----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER                              */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* COMM PORT POINTER*/
+
+    /*----------------------------------------------------------------------*/
+    /*  SEND OUT THE LENGTH AND THE MESSAGE DATA                            */
+    /*----------------------------------------------------------------------*/
+    pack_byte(message, &cp_ptr->out_port, message_size);
+}
+
+/****************************************************************************/
+/*  out_msg16()                                                             */
+/****************************************************************************/
+static inline void out_msg16(int ch_no, void *message, size_t message_size)
+{
+    /*----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER                              */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* COMM PORT POINTER*/
+
+    /*----------------------------------------------------------------------*/
+    /*  PACKED THE DATA AND SEND OUT THE LENGTH AND THE MESSAGE DATA        */
+    /*----------------------------------------------------------------------*/
+    pack_halfword(message, &cp_ptr->out_port, message_size);
+}
+
+/*****************************************************************************/
+/*  cp_in_level()                                                            */
+/*****************************************************************************/
+static inline int cp_in_level(int ch_no)
+{
+    int     level;
+
+    /*-----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND RETURN THE INPUT LEVEL                  */
+    /*-----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER     */
+    level  = cp_ptr->gcontrol_bit.in_level;
+    return (level == 15) ? 8 : level;
+}
+
+/*****************************************************************************/
+/*  cp_in_halt ()                                                            */
+/*****************************************************************************/
+static inline void cp_in_halt(int ch_no)
+{
+    /*-----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND HALT THE INPUT FIFO                     */
+    /*-----------------------------------------------------------------------*/
+    volatile COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* COMM PORT POINTER */
+    cp_ptr->gcontrol_bit.ich = 1;
+}
+
+/*****************************************************************************/
+/*  cp_in_release()                                                          */
+/*****************************************************************************/
+static inline void cp_in_release(int ch_no)
+{
+    /*-----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND UNHALT THE INPUT FIFO                   */
+    /*-----------------------------------------------------------------------*/
+    volatile COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* COMM PORT POINTER */
+    cp_ptr->gcontrol_bit.ich = 0;
+}
+
+/*****************************************************************************/
+/*  cp_out_level()                                                           */
+/*****************************************************************************/
+static inline int cp_out_level(int ch_no)
+{
+    int     level;
+
+    /*-----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND RETURN THE OUTPUT LEVEL                 */
+    /*-----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER     */
+    level  = cp_ptr->gcontrol_bit.out_level;
+    return (level == 15) ? 8 : level;
+}
+
+/*****************************************************************************/
+/*  cp_out_halt()                                                            */
+/*****************************************************************************/
+static inline void cp_out_halt(int ch_no)
+{
+    /*-----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND HALT THE OUTPUT FIFO                    */
+    /*-----------------------------------------------------------------------*/
+    volatile COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* COMM PORT POINTER */
+    cp_ptr->gcontrol_bit.och = 1;
+}
+
+/*****************************************************************************/
+/*  cp_out_release()                                                         */
+/*****************************************************************************/
+static inline void cp_out_release(int ch_no)
+{
+    /*-----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND UNHALT THE OUTPUT FIFO                  */
+    /*-----------------------------------------------------------------------*/
+    volatile COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* COMM PORT POINTER */
+    cp_ptr->gcontrol_bit.och = 0;
+}
+
+#endif    /*  _INLINE  */
+
+#undef    __INLINE
+
+#endif    /*  compt40.h  */
+
+dma40.h/        925425274   0     0     0       16427     `
+/****************************************************************************/
+/* dma40.h V5.11                                                           */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+
+#if 0
+/****************************************************************************/
+/* -6/20/94: Changed DMA_MOVE_CONTROL,DMA_CMPLX_REAL,DMA_CMPLX_IMGN define  */
+/*           statements from DMA low priority to DMA-CPU rotating priotity. */
+/* -6/20/94: Changed DMA_TRIG_ADDR define statement from DMA low priority to*/
+/*           DMA high priority (to avoid mutual exclusion problems in dummy */
+/*           1-word read)                                                   */
+/* -8/22/96: Changed AUTOINIT structure to be cleaner.                      */
+/*           Moved volatile declarations to change from volatile data to    */
+/*           volatile pointers in the DMA_REG structures.                   */
+/****************************************************************************/
+#endif
+
+#ifndef  _DMA40
+#define  _DMA40
+
+#ifndef  _SIZE_T
+#define  _SIZE_T
+typedef  unsigned            size_t;
+#endif
+
+#ifndef  gcontrol
+#define  gcontrol            _gctrl._intval
+#endif
+#ifndef  gcontrol_bit
+#define  gcontrol_bit        _gctrl._bitval
+#endif
+
+#if defined(_INLINE)
+#define  __INLINE            static inline
+#else
+#define  __INLINE
+#endif
+
+#define  DMA_MOVE_CONTROL    0x000C40005
+#define  DMA_CMPLX_REAL      0x000C02009
+#define  DMA_CMPLX_IMGN      0x000C42005
+#define  DMA_INT_TRIG        0x000C4004B
+#define  DMA_CTRL_BASE       (long *)0x0001000A0
+#define  DMA_TRIG_ADDR       (void *)0x02FF800
+#define  DMA_STOP            0x0FF3FFFFF
+#define  DMA_STOP01          0x000400000
+#define  DMA_STOP10          0x000800000
+#define  DMAUX_STOP          0x0FCFFFFFF
+#define  DMAUX_STOP01        0x001000000
+#define  DMAUX_STOP10        0x002000000
+#define  DMA_GO11            0x000C00000
+#define  DMAUX_GO11          0x003000000
+
+/*****************************************************************************/
+/* MACRO DEFINITIONS                                                         */
+/*****************************************************************************/
+#define  DMA_ADDR(A)         ((DMA_REG *)(DMA_CTRL_BASE + (A << 4)))
+#define  DMA_RESET(B)        (*(DMA_CTRL_BASE + (B << 4)) &= DMA_STOP)
+#define  DMA_HALT(C)         (*(DMA_CTRL_BASE+(C<<4))=(*(DMA_CTRL_BASE+(C<<4)) \
+                             &DMA_STOP) | DMA_STOP01)
+#define  DMA_HALT_B(D)       (*(DMA_CTRL_BASE+(D<<4))=(*(DMA_CTRL_BASE+(D<<4)) \
+                             &DMA_STOP) | DMA_STOP10)
+#define  DMA_AUX_RESET(E)    (*(DMA_CTRL_BASE + (E << 4)) &= DMAUX_STOP)
+#define  DMA_AUX_HALT(F)     (*(DMA_CTRL_BASE+(F<<4))=(*(DMA_CTRL_BASE+(F<<4)) \
+                             &DMAUX_STOP) | DMAUX_STOP01)
+#define  DMA_AUX_HALT_B(G)   (*(DMA_CTRL_BASE+(G<<4))=(*(DMA_CTRL_BASE+(G<<4)) \
+                             &DMAUX_STOP) | DMAUX_STOP10)
+#define  DMA_RESTART(H)      (*(DMA_CTRL_BASE + (H << 4)) |= DMA_GO11)
+#define  DMA_AUX_RESTART(I)  (*(DMA_CTRL_BASE + (I << 4)) |= DMAUX_GO11)
+
+/*****************************************************************************/
+/* UNION AND STRUCTURE DEFINITIONS FOR DMA GLOBAL CONTROL REGISTER           */
+/*****************************************************************************/
+typedef  union {
+         struct {
+           unsigned int           dma_pri       :2;  /* DMA priority         */
+           unsigned int           transfer      :2;  /* Transfer mode        */
+           unsigned int           aux_transfer  :2;  /* Aux. transfer mode   */
+           unsigned int           sync          :2;  /* Sync. mode           */
+           unsigned int           auto_static   :1;  /* Autoinit static      */
+           unsigned int           aux_autostat  :1;  /* Aux. autoinit static */
+           unsigned int           auto_sync     :1;  /* Autoinit Sync.       */
+           unsigned int           aux_autosync  :1;  /* Aux. autoinit Sync.  */
+           unsigned int           rd_bit_rev    :1;  /* Read bit reversed    */
+           unsigned int           wr_bit_rev    :1;  /* Write bit reversed   */
+           unsigned int           split         :1;  /* Split mode           */
+           unsigned int           com_port      :3;  /* Communication port   */
+           unsigned int           tcc           :1;  /* Transfer counter int */
+           unsigned int           aux_tcc       :1;  /* Auxiliary tcc        */
+           volatile unsigned int  tcc_flag      :1;  /* Tcc flag             */
+           volatile unsigned int  aux_tcc_flag  :1;  /* Aux. Tcc flag        */
+           volatile unsigned int  start         :2;  /* DMA start bits       */
+           volatile unsigned int  aux_start     :2;  /* DMA aux. start bits  */
+           volatile unsigned int  status        :2;  /* DMA status bits      */
+           volatile unsigned int  aux_status    :2;  /* DMA aux. status bits */
+           unsigned int           pri_scheme    :1;  /* Pri. scheme:DMA0 only*/
+           unsigned int           r_31          :1;  /* Reserved bit 31      */
+       } _bitval;                                    /* DMA ctrl bit fields  */
+
+         volatile unsigned long   _intval;           /* -ENTIRE- DMA control */
+	                                             /* word from above      */
+       } DMA_CONTROL;
+
+/*****************************************************************************/
+/* STRUCTURE DEFINITION FOR DMA TRANSFER REGISTERS                           */
+/*****************************************************************************/
+typedef  struct {
+         void * volatile         src;           /* Source register           */
+         volatile long           src_idx;       /* Source index register     */
+         volatile unsigned long  count;         /* Counter register          */
+         void * volatile         dst;           /* Destination register      */
+         volatile long           dst_idx;       /* Destination index reg     */
+       } DMA_REGSET;
+
+/*****************************************************************************/
+/* STRUCTURE DEFINITION FOR DMA AUTOINIT TABLES                              */
+/*****************************************************************************/
+typedef  struct {
+         void          *src;                    /* Source register           */
+         long           src_idx;                /* Source index register     */
+         unsigned long  count;                  /* Counter register          */
+         void          *dst;                    /* Destination register      */
+         long           dst_idx;                /* Destination index reg     */
+       } AUTOINIT_DMA_REGSET;
+
+/*****************************************************************************/
+/* STRUCTURE DEFINITION FOR DMA REGISTERS                                    */
+/*****************************************************************************/
+typedef  struct {
+         DMA_CONTROL              _gctrl;       /* Global control register   */
+         DMA_REGSET               dma_regs;     /* Src. & dest. regs set     */
+         unsigned long * volatile dma_link;     /* Link pointer register     */
+         volatile unsigned long   dma_aux_count;/* Aux. counter register     */
+         unsigned long * volatile dma_aux_link; /* Aux. link pointer reg     */
+         unsigned long            unused[7];    /* Unused reserved mem. map  */
+       } DMA_REG;
+
+/*****************************************************************************/
+/* STRUCTURE DEFINITION FOR SPLIT MODE DMA PRIMARY CHANNEL REGISTERS         */
+/*****************************************************************************/
+typedef  struct {
+         DMA_CONTROL     _gctrl;                /* Global control register   */
+         void * volatile dma_src;               /* Source register           */
+         volatile long   dma_src_idx;           /* Source index register     */
+         volatile unsigned long   dma_count;    /* Counter register          */
+         unsigned long * volatile dma_link;     /* Link pointer register     */
+       } DMA_PRI_REG;
+
+/*****************************************************************************/
+/* STRUCTURE DEFINITION FOR SPLIT MODE DMA AUXILIARY CHANNEL REGISTERS       */
+/*****************************************************************************/
+typedef  struct {
+         DMA_CONTROL     _gctrl;                /* Global control register   */
+         void * volatile dma_dst;               /* Destination register      */
+         volatile long   dma_dst_idx;           /* Destination index reg     */
+         volatile unsigned long   dma_aux_count;/* Aux. counter register     */
+         unsigned long * volatile dma_aux_link; /* Aux. link pointer reg     */
+       } DMA_AUX_REG;
+
+/*****************************************************************************/
+/* STRUCTURE DEFINITION FOR DMA AUTOINITIALIZATION TABLE                     */
+/*****************************************************************************/
+typedef  struct {
+         unsigned long            ctrl1;        /* 1st global control reg    */
+	 AUTOINIT_DMA_REGSET      dma_mesg1;    /* Src/dst regs for length   */
+         unsigned long           *link1;        /* 1st link pointer register */
+
+         unsigned long            ctrl2;        /* 2nd global control reg    */
+         AUTOINIT_DMA_REGSET      dma_mesg2;    /* Src/dst regs for message  */
+         unsigned long           *link2;        /* 2nd link pointer register */
+       } AUTOINIT;
+
+/*****************************************************************************/
+/* GLOBAL MEMORY DEFINITION                                                  */
+/*****************************************************************************/
+extern   AUTOINIT        auto_tab[];            /* Memory for autoinit table */
+
+/*****************************************************************************/
+/* FUNCTION DEFINITIONS                                                      */
+/*****************************************************************************/
+__INLINE int  chk_dma(int ch_no);
+__INLINE int  chk_pri_dma(int ch_no);
+__INLINE int  chk_aux_dma(int ch_no);
+
+void          dma_move(int ch_no, void *src, void *dest, size_t length);
+void          dma_cmplx(int ch_no, void *src, void  *dest,
+                                   size_t fft_size, int priority);
+void          dma_int_move(int ex_int, int  ch_no, void *src,
+                                       void *dest, size_t length);
+
+void          dma_go(int ch_no, DMA_REG *reg);
+void          dma_prigo(int ch_no, DMA_PRI_REG *reg);
+void          dma_auxgo(int ch_no, DMA_AUX_REG *reg);
+void          dma_extrig(int ex_int, int ch_no, DMA_REG *reg);
+
+void          set_dma_auto(void *tab_addr, long  ctrl, void *src, int src_idx,
+                      size_t length, void *dest, int dest_idx, void *next_tab);
+__INLINE void set_pri_auto(void *tab_addr, long   ctrl,   void *src,
+                           int   src_idx,  size_t length, void *next_tab);
+__INLINE void set_aux_auto(void *tab_addr, long   ctrl,   void *dest,
+                           int   dest_idx, size_t length, void *next_tab);
+
+__INLINE void dma_auto_go(int ch_no, long ctrl, void *link_tab);
+
+#if defined(_INLINE)
+/*****************************************************************************/
+/*  chk_dma()                                                                */
+/*****************************************************************************/
+static inline int chk_dma(int ch_no)
+{
+    /*-----------------------------------------------------------------------*/
+    /*  SEND UP DMA POINTER AND CHECK ON THE START FIELD                     */
+    /*-----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr = DMA_ADDR(ch_no);           /* DMA REGISTER POINTER    */
+    return (dma_ptr->gcontrol_bit.start == 3 |
+            dma_ptr->gcontrol_bit.aux_start == 3);
+}
+
+/*****************************************************************************/
+/*  chk_pri_dma()                                                            */
+/*****************************************************************************/
+static inline int chk_pri_dma(int ch_no)
+{
+    /*-----------------------------------------------------------------------*/
+    /*  SEND UP DMA POINTER AND CHECK ON THE START FIELD FIELD               */
+    /*-----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr = DMA_ADDR(ch_no);           /* DMA REGISTER POINTER    */
+    return  ((dma_ptr->gcontrol & 0x0C00000) == 0x0C00000);
+}
+
+/*****************************************************************************/
+/*  chk_aux_dma()                                                            */
+/*****************************************************************************/
+static inline int chk_aux_dma(int ch_no)
+{
+    /*-----------------------------------------------------------------------*/
+    /*  SEND UP DMA POINTER AND CHECK ON THE START FIELD FIELD               */
+    /*-----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr = DMA_ADDR(ch_no);           /* DMA REGISTER POINTER    */
+    return  ((dma_ptr->gcontrol & 0x03000000) == 0x03000000);
+}
+
+/*****************************************************************************/
+/*  dma_auto_go()                                                            */
+/*****************************************************************************/
+static inline void dma_auto_go(int ch_no, long ctrl, void *link_tab)
+{
+    /*-----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND START DMA AUTOINIT             */
+    /*-----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr        = DMA_ADDR(ch_no);    /* DMA REGISTER POINTER    */
+    dma_ptr->dma_regs.count = 0;
+    dma_ptr->dma_link       = link_tab;
+    dma_ptr->gcontrol       = ctrl;
+}
+
+/*****************************************************************************/
+/*  set_pri_auto()                                                           */
+/*****************************************************************************/
+static inline void set_pri_auto(void *tab_addr, long   ctrl,   void *src,
+                                int   src_idx,  size_t length, void *next_tab)
+{
+    DMA_PRI_REG *table = tab_addr;                /* DMA AUTOINIT LINK TABLE */
+
+    /*-----------------------------------------------------------------------*/
+    /* SETUP DMA SPLIT MODE AUTOINIT TABLE FOR PRIMARY CHANNEL               */
+    /*-----------------------------------------------------------------------*/
+    table->gcontrol    = ctrl;
+    table->dma_src     = src;
+    table->dma_src_idx = src_idx;
+    table->dma_count   = length;
+    table->dma_link    = next_tab;
+}
+
+/*****************************************************************************/
+/*  set_aux_auto()                                                           */
+/*****************************************************************************/
+static inline void set_aux_auto(void *tab_addr, long   ctrl,   void *dest,
+                                int   dest_idx, size_t length, void *next_tab)
+{
+    DMA_AUX_REG *table = tab_addr;                /* DMA AUTOINIT LINK TABLE */
+
+    /*-----------------------------------------------------------------------*/
+    /* SETUP DMA SPLIT MODE AUTOINIT TABLE FOR AUXILIARY CHANNEL             */
+    /*-----------------------------------------------------------------------*/
+    table->gcontrol      = ctrl;
+    table->dma_dst       = dest;
+    table->dma_dst_idx   = dest_idx;
+    table->dma_aux_count = length;
+    table->dma_aux_link  = next_tab;
+}
+
+#endif    /*  _INLINE  */
+
+#undef    __INLINE
+
+#endif    /*  dma40.h    */
+
+
+
+
+intpt40.h/      925425276   0     0     0       5228      `
+/****************************************************************************/
+/* intpt40.h V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#ifndef   _INTPT40
+#define   _INTPT40
+
+#if defined(_INLINE)
+#define  __INLINE	   static inline
+#else
+#define  __INLINE
+#endif
+
+#ifndef    gcontrol
+#define    gcontrol	   _gctrl._intval
+#endif
+#ifndef    gcontrol_bit
+#define    gcontrol_bit    _gctrl._bitval
+#endif
+
+#ifndef    DEFAULT
+#define    DEFAULT	   (void *)-1
+#endif
+
+#ifndef    lcontrol
+#define    lcontrol	   _lctrl._intval
+#endif
+#ifndef    lcontrol_bit
+#define    lcontrol_bit    _lctrl._bitval
+#endif
+
+/*****************************************************************************/
+/* NUMBER DEFINITIONS FOR IIE SETUP FUNCTIONS				     */
+/*****************************************************************************/
+#define    TIMER0	    0
+#define    ICFULL0	    1
+#define    ICRDY0	    2
+#define    OCRDY0	    3
+#define    OCEMPTY0	    4
+#define    ICFULL1	    5
+#define    ICRDY1	    6
+#define    OCRDY1	    7
+#define    OCEMPTY1	    8
+#define    ICFULL2	    9
+#define    ICRDY2	   10
+#define    OCRDY2	   11
+#define    OCEMPTY2	   12
+#define    ICFULL3	   13
+#define    ICRDY3	   14
+#define    OCRDY3	   15
+#define    OCEMPTY3	   16
+#define    ICFULL4	   17
+#define    ICRDY4	   18
+#define    OCRDY4	   19
+#define    OCEMPTY4	   20
+#define    ICFULL5	   21
+#define    ICRDY5	   22
+#define    OCRDY5	   23
+#define    OCEMPTY5	   24
+#define    DMA0 	   25
+#define    DMA1 	   26
+#define    DMA2 	   27
+#define    DMA3 	   28
+#define    DMA4 	   29
+#define    DMA5 	   30
+#define    TIMER1	   31
+
+/*****************************************************************************/
+/* NUMBER DEFINITIONS FOR IIF SETUP FUNCTIONS				     */
+/*****************************************************************************/
+#define    IIOF0_INT	    0
+#define    IIOF0_FLAG	    2
+#define    IIOF1_INT	    4
+#define    IIOF1_FLAG	    6
+#define    IIOF2_INT	    8
+#define    IIOF2_FLAG	   10
+#define    IIOF3_INT	   12
+#define    IIOF3_FLAG	   14
+#define    TIMER0_FLAG	   24
+#define    DMA0_FLAG	   25
+#define    DMA1_FLAG	   26
+#define    DMA2_FLAG	   27
+#define    DMA3_FLAG	   28
+#define    DMA4_FLAG	   29
+#define    DMA5_FLAG	   30
+#define    TIMER1_FLAG	   31
+
+/*****************************************************************************/
+/* MACRO DEFINITIONS							     */
+/*****************************************************************************/
+#define    INT_ENABLE()    asm("        OR    2000H,ST   ;Enable GIE")
+#define    INT_DISABLE()   asm("        ANDN  2000H,ST   ;Disable GIE")
+#define    CPU_IDLE()	   asm("        IDLE             ;Wait for int")
+#define    CACHE_ON()	   asm("        OR    0800H,ST   ;Cache on")
+#define    CACHE_OFF()	   asm("        ANDN  0800H,ST   ;Cache off")
+#define    CACHE_FREEZE()  asm("        OR    0400H,ST   ;Cache freeze")
+#define    CACHE_DEFROST() asm("        ANDN  0400H,ST   ;Cache defrost")
+#define    CACHE_CLEAR()   asm("        OR    1000H,ST   ;Cache clear")
+#define    GET_ST()	   asm("        LDI   ST,R0      ;Get ST value")
+#define    GET_IIF()	   asm("        LDI   IIF,R0     ;Get IIF value")
+#define    GET_IIE()	   asm("        LDI   IIE,R0     ;Get IIE value")
+#define    GET_DIE()	   asm("        LDI   DIE,R0     ;Get DIE value")
+#define    GET_IVTP()	   asm("        LDEP  IVTP,R0    ;Get IVTP value")
+#define    GET_TVTP()	   asm("        LDEP  TVTP,R0    ;Get TVTP value")
+
+/*****************************************************************************/
+/* GLOBAL MEMORY DEFINITIONS						     */
+/*****************************************************************************/
+extern unsigned long	   int_vect_buf[];
+extern unsigned long	   ivtp_buf;
+extern unsigned long	   tvtp_buf;
+extern unsigned long	   _vector[];
+
+/*****************************************************************************/
+/* FUNCTION DEFINITIONS 						     */
+/*****************************************************************************/
+int	   chk_iif_flag(int flag_bit);
+void	   set_iif_flag(int flag_bit);
+void	   reset_iif_flag(int flag_bit);
+void	   load_iif(unsigned long iif_value);
+
+int	   chk_iie(int enable_bit);
+void	   set_iie(int enable_bit);
+void	   reset_iie(int enable_bit);
+void	   load_iie(unsigned long iie_value);
+
+void	   load_die(unsigned long die_data);
+void	   dma_sync_set(int ch_no, int bit_value, int r_w);
+void	   set_iiof(int ch_no, int iiof_value);
+int	   iiof_in(int ch_no);
+void	   iiof_out(int ch_no, int flag_bit);
+
+typedef void (*ISR_FnPtr)(void);
+void	   install_int_vector(ISR_FnPtr ISRFnPtr, int N);
+void	   deinstall_int_vector(int N);
+void	   set_ivtp(void *int_vect);
+void	   reset_ivtp();
+void	   set_tvtp(void *trap_vect);
+void	   reset_tvtp();
+
+int	   st_value();
+int	   iif_value();
+int	   iie_value();
+int	   die_value();
+int	   ivtp_value();
+int	   tvtp_value();
+
+#endif	   /*  intpt40.h  */
+
+
+
+mulpro40.h/     925425276   0     0     0       3118      `
+/****************************************************************************/
+/* mulpro40.h V5.11							    */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#ifndef   _MULPRO40
+#define   _MULPRO40
+
+#if defined(_INLINE)
+#define  __INLINE	   static inline
+#else
+#define  __INLINE
+#endif
+
+#ifndef    gcontrol
+#define    gcontrol	   _gctrl._intval
+#endif
+#ifndef    gcontrol_bit
+#define    gcontrol_bit    _gctrl._bitval
+#endif
+
+#ifndef    lcontrol
+#define    lcontrol	   _lctrl._intval
+#endif
+#ifndef    lcontrol_bit
+#define    lcontrol_bit    _lctrl._bitval
+#endif
+
+#ifndef    ID_ADDR
+#define    ID_ADDR	   (int *)0x02fff00
+#endif
+/*****************************************************************************/
+/* MACRO DEFINITIONS							     */
+/*****************************************************************************/
+#define    MY_ID()	   (*ID_ADDR)
+
+/*****************************************************************************/
+/* UNION AND STRUCTURE DEFINITIONS FOR DMA GLOBAL CONTROL REGISTER	     */
+/*****************************************************************************/
+typedef union {
+	struct {
+	   volatile unsigned int  ce_0	      :1;  /* Ctrl signal 0 enable   */
+	   volatile unsigned int  ce_1	      :1;  /* Ctrl signal 0 enable   */
+	   volatile unsigned int  de_0	      :1;  /* Data bus enable	     */
+	   volatile unsigned int  ae_0	      :1;  /* Address bus enable     */
+	   unsigned int 	  sww0	      :2;  /* STRB0 S/W wait states  */
+	   unsigned int 	  sww1	      :2;  /* STRB1 S/W wait states  */
+	   unsigned int 	  wtcnt0      :3;  /* STRB0 wait state cnt   */
+	   unsigned int 	  wtcnt1      :3;  /* STRB1 wait state cnt   */
+	   unsigned int 	  pagesize0   :5;  /* STRB0 page size ctrl   */
+	   unsigned int 	  pagesize1   :5;  /* STRB1 page size ctrl   */
+	   unsigned int 	  strb_active :5;  /* STRB0,1 active ctrl    */
+	   unsigned int 	  strb_switch :1;  /* STRB switch cycle ctrl */
+	   unsigned int 	  r_rest      :2;  /* Reserved bits	     */
+       } _bitval;				   /* DMA control bit fields */
+	 volatile unsigned long	_intval;	   /* DMA control word	     */
+       } BUS_CONTROL;
+
+/*****************************************************************************/
+/* STRUCTURE DEFINITION FOR BUS CONTROL REGISTERS			     */
+/*****************************************************************************/
+typedef  struct {
+	 BUS_CONTROL	 _gctrl;		/* Global bus ctrl register  */
+	 unsigned long	 reserved_1[3]; 	/* Unused reserved mem. map  */
+	 BUS_CONTROL	 _lctrl;		/* Local bus ctrl register   */
+	 unsigned long	 reserved_2[11];	/* Unused reserved mem. map  */
+       } BUS_CTRL_REG;
+
+/*****************************************************************************/
+/* FUNCTION DEFINITIONS 						     */
+/*****************************************************************************/
+int	   lock(int *semaphore);
+void	   unlock(int *semaphore);
+
+#endif	   /*  mulpro40.h  */
+
+
+timer40.h/      925425276   0     0     0       11102     `
+/****************************************************************************/
+/* timer40.h V5.11							    */
+/* Copyright (c) 1992-1999 Texas Instruments Inc.                           */
+/****************************************************************************/
+/*  -6/20/94: removed CLOCK_PER_SEC define statement and replace it for     */
+/*            a global variable in timer40.c                                */
+/****************************************************************************/
+extern float CLOCK_PER_SEC;
+
+#ifndef   _TIMER40
+#define   _TIMER40
+
+#if defined(_INLINE)
+#define  __INLINE  static inline
+#else
+#define  __INLINE
+#endif
+
+#ifndef  DEFAULT
+#define  DEFAULT	   (void *)-1
+#endif
+
+#define  TIM_START	   0x02C1
+#define  SLEEP_CALL_DELAY  65
+#define  TIME_CALL_DELAY   62
+#define  TIMER_BASE	   ((TIMER_REG *)0x0100020)
+#define  TIMER_SIZE	   16
+#define  TIMER_CTRL	   (long *)0x0100020
+#define  TIM_GO 	   0x0C0
+#define  TIM_UNHALT	   0x080
+#define  TIM_HALT	   0x0FF7F
+#define  TIMER_CLOCK	   (CLOCK_PER_SEC/2.0)
+
+#ifndef  gcontrol
+#define  gcontrol	   _gctrl._intval
+#endif
+#ifndef  gcontrol_bit
+#define  gcontrol_bit	   _gctrl._bitval
+#endif
+
+extern unsigned int	   time_count;
+
+/*****************************************************************************/
+/* MACRO DEFINITIONS							     */
+/*****************************************************************************/
+#define  TIMER_ADDR(A)	   ((TIMER_REG *)((char *)TIMER_BASE + A * TIMER_SIZE))
+#define  TIMER_START(B)    (*(TIMER_CTRL + (B << 4)) |= TIM_GO)
+#define  TIMER_HALT(C)	   (*(TIMER_CTRL + (C << 4)) &= TIM_HALT)
+#define  TIMER_RESTART(D)  (*(TIMER_CTRL + (D << 4)) |= TIM_UNHALT)
+
+/*****************************************************************************/
+/* UNION AND STRUCTURE DEFINITION FOR TIMER GLOBAL CONTROL REGISTER	     */
+/*****************************************************************************/
+typedef  union {
+	 struct {
+	 unsigned int		func	 :1;	/* Timer function control    */
+	 unsigned int		i_o	 :1;	/* Input/output control      */
+	 unsigned int		datout	 :1;	/* Data output bit	     */
+	 volatile unsigned int	datin	 :1;	/* Data input bit	     */
+	 unsigned int		r_45	 :2;	/* Reserved bits 4 & 5	     */
+	 unsigned int		go	 :1;	/* Timer GO bit 	     */
+	 unsigned int		hld_	 :1;	/* Timer hold		     */
+	 unsigned int		cp_	 :1;	/* Clock/pulse mode	     */
+	 unsigned int		clksrc	 :1;	/* Timer clock source	     */
+	 unsigned int		inv	 :1;	/* Inverter control bit      */
+	 volatile unsigned int	tstat	 :1;	/* Status bit of the timer   */
+	 unsigned int		r_rest	 :20;	/* Reserved bits	     */
+       } _bitval;				/* Timer control bit fields  */
+       volatile unsigned long _intval;		/* Timer control word	     */
+       } TIMER_CONTROL;
+
+/*****************************************************************************/
+/* STRUCTURE DEFINITION FOR TIMER CONTROL REGISTERS			     */
+/*****************************************************************************/
+typedef  struct {
+	 TIMER_CONTROL _gctrl;			/* Timer control register    */
+	 unsigned long reserved1[3];		/* Unused reserved mem. map  */
+	 volatile unsigned long counter; 	/* Timer counter register    */
+	 unsigned long reserved2[3];		/* Unused reserved mem. map  */
+	 unsigned long period;			/* Timer period register     */
+	 unsigned long reserved3[3];		/* Unused reserved mem. map  */
+       } TIMER_REG;
+
+/*****************************************************************************/
+/* FUNCTION DEFINITIONS 						     */
+/*****************************************************************************/
+__INLINE void	time_start(int t);
+__INLINE int	time_read(int t);
+__INLINE int	time_stop(int t);
+__INLINE void	count_down(int t, unsigned long x);
+__INLINE int	count_left(int t);
+void		time_delay(unsigned long x);
+
+void		c_int45(void);
+void		wakeup(void);
+__INLINE void	time_go(int ch_no, TIMER_REG *reg);
+
+void		time_run();
+__INLINE float	elapse();
+float		time_end();
+__INLINE void	alarm(float x);
+__INLINE float	time_left();
+void		sleep(float x);
+
+__INLINE int	in_timer(int t);
+__INLINE void	out_timer(int t, int flag);
+
+
+#if defined(_INLINE)
+/****************************************************************************/
+/*  time_start()							    */
+/****************************************************************************/
+static inline void time_start(int t)
+{
+    /*----------------------------------------------------------------------*/
+    /*	SET UP TIMER REGISTER POINTER AND START THE TIMER FUNCTION	    */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr    = TIMER_ADDR(t);	 /* TIMER REGISTER POINTER  */
+    tim_ptr->period	   = -1;
+    tim_ptr->gcontrol	   = TIM_START;
+}
+
+/****************************************************************************/
+/*  time_read() 							    */
+/****************************************************************************/
+static inline int time_read(int t)
+{
+    /*----------------------------------------------------------------------*/
+    /*	SET UP TIMER REGISTER POINTER AND RETURN THE COUNTER VALUE	    */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);	 /* TIMER REGISTER POINTER  */
+    return (tim_ptr->counter);
+}
+
+/****************************************************************************/
+/*  time_stop() 							    */
+/****************************************************************************/
+static inline int time_stop(int t)
+{
+    /*----------------------------------------------------------------------*/
+    /*	SET UP TIMER REGISTER POINTER AND STOP THE TIMER FUNCTION	    */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);	 /* TIMER REGISTER POINTER  */
+    tim_ptr->gcontrol_bit.hld_ = 0;
+    return(tim_ptr->counter);
+}
+
+
+/****************************************************************************/
+/*  count_down()							    */
+/****************************************************************************/
+static inline void count_down(int t, unsigned long x)
+{
+    /*----------------------------------------------------------------------*/
+    /*	SET UP TIMER REGISTER POINTER AND START THE TIMER FUNCTION	    */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);	 /* TIMER REGISTER POINTER  */
+    tim_ptr->period	= x/2;
+    tim_ptr->gcontrol	= TIM_START;
+}
+
+/****************************************************************************/
+/*  count_left()							    */
+/****************************************************************************/
+static inline int count_left(int t)
+{
+    /*----------------------------------------------------------------------*/
+    /*	SET UP TIMER REGISTER POINTER AND RETURN (PERIOD - COUNTER)/2 VALUE */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);	 /* TIMER REGISTER POINTER  */
+    return ((tim_ptr->period - tim_ptr->counter)*2);
+}
+
+/****************************************************************************/
+/*  time_go()								    */
+/****************************************************************************/
+static inline void time_go(int ch_no, TIMER_REG *reg)
+{
+    TIMER_REG  *tim_ptr = TIMER_ADDR(ch_no);	/* TIMER REGISTER POINTER   */
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND START DMA FUNCTION	    */
+    /*----------------------------------------------------------------------*/
+    tim_ptr->counter  = reg->counter;
+    tim_ptr->period   = reg->period;
+    tim_ptr->gcontrol = reg->gcontrol;
+}
+
+/****************************************************************************/
+/*  elapse()								    */
+/****************************************************************************/
+static inline float elapse()
+{
+    float			  x;
+    /*----------------------------------------------------------------------*/
+    /*	RETURN THE COUNTER VALUE IN SECOND				    */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_BASE;	       /* TIMER 0 REGISTER POINTER  */
+    x  = (float)time_count*4294967296.0;
+    x += (float)tim_ptr->counter;
+    return (x/TIMER_CLOCK);
+}
+
+/****************************************************************************/
+/*  alarm()								    */
+/****************************************************************************/
+static inline void alarm(float x)
+{
+    TIMER_REG  *tim_ptr = TIMER_BASE;	       /* TIMER 0 REGISTER POINTER  */
+
+    /*----------------------------------------------------------------------*/
+    /*	START THE TIMER FUNCTION					    */
+    /*----------------------------------------------------------------------*/
+    tim_ptr->period   = (unsigned int)(x * TIMER_CLOCK);
+    tim_ptr->gcontrol = TIM_START;
+}
+
+/****************************************************************************/
+/*  time_left() 							    */
+/****************************************************************************/
+static inline float time_left()
+{
+    TIMER_REG  *tim_ptr = TIMER_BASE;	       /* TIMER 0 REGISTER POINTER  */
+
+    /*----------------------------------------------------------------------*/
+    /*	RETURN (PERIOD - COUNTER) VALUE IN SECOND			    */
+    /*----------------------------------------------------------------------*/
+    return ((float)(tim_ptr->period - tim_ptr->counter)/TIMER_CLOCK);
+}
+
+/****************************************************************************/
+/*  in_timer()								    */
+/****************************************************************************/
+static inline int in_timer(int t)
+{
+    /*----------------------------------------------------------------------*/
+    /*	SET UP TIMER REGISTER POINTER AND RETURN THE INPUT DATA 	    */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);	  /* TIMER REGISTER POINTER */
+    tim_ptr->gcontrol	= 0;
+    return(tim_ptr->gcontrol_bit.datin);
+}
+
+/****************************************************************************/
+/*  out_timer() 							    */
+/****************************************************************************/
+static inline void out_timer(int t, int flag)
+{
+    /*----------------------------------------------------------------------*/
+    /*	SET UP TIMER REGISTER POINTER AND SET THE OUTPUT DATA FLAG	    */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);	/* TIMER REGISTER POINTER   */
+    tim_ptr->gcontrol	= (flag << 2) | 2;
+}
+
+#endif	  /*  _INLINE  */
+
+#undef	  __INLINE
+
+#endif	  /*  timer40.h  */
+
+
+
+chk_iie.asm/    925425276   0     0     0       1839      `
+        .length  85
+        .width   132
+*******************************************************************************
+* chk_iie.asm V5.11 - the interrupt enable check up function                 *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  flag  = chk_iie(int enable_bit);
+*
+*    input:  enable_bit - the bit field of the interrupt enable (= 0 - 31)
+*
+*    output: flag       - 0: the interrupt flag is not set in IIE
+*                       - 1: the interrupt flag is set in IIE
+*
+*    register used - R0, AR0, and AR2
+*
+*    NOTE:  This function subroutine provides user to check if
+*           the bit of the internal Interrupt Enable (IIE)
+*           register is set or not
+*
+*******************************************************************************
+        .globl  _chk_iie
+        .text
+*******************************************************************************
+*       int chk_iie(int enable_bit)
+*******************************************************************************
+_chk_iie:
+;
+;   Check if the bit "enable_bit" in IIE is set or not
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the enable_bit
+        .endif
+        LDI     1H,R0           ; Get mask
+        POP     AR0             ; Get return address
+        BUD     AR0             ; Return to caller
+        LSH     AR2,R0          ; Shift mask to the corresponding bit
+        AND     IIE,R0          ; Check the enable bit
+        LDINZ   1,R0            ; Set return value to 1 if enable_bit is set
+        .end
+
+
+
+chk_iif.asm/    925425276   0     0     0       1830      `
+        .length  85
+        .width   132
+*******************************************************************************
+* chk_iif.asm V5.11 - the interrupt flag check up function                   *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  flag  = chk_iif_flag(int flag_bit);
+*
+*    input:  flag_bit - the bit field of the interrupt flag (= 0 - 31)
+*
+*    output: flag     - 0: the interrupt flag is not set in IIF
+*                     - 1: the interrupt flag is set in IIF
+*
+*    register used - R0, AR0, and AR2
+*
+*    NOTE:  This function subroutine provides user to check if
+*           the flag of the Internal Interrupt Flag (IIF)
+*           register is set or not
+*
+*******************************************************************************
+        .globl  _chk_iif_flag
+        .text
+*******************************************************************************
+*       int chk_iif_flag(int flag_bit)
+*******************************************************************************
+_chk_iif_flag:
+;
+;   Check if the bit "flag_bit" in IIF is set or not
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the flag_bit
+        .endif
+        LDI     1H,R0           ; Get mask
+        POP     AR0             ; Get return address
+        BUD     AR0             ; Return to caller
+        LSH     AR2,R0          ; Shift mask to the corresponding bit
+        AND     IIF,R0          ; Check the flag
+        LDINZ   1,R0            ; Set return value to 1 if flag is set
+        .end
+
+
+die_set.asm/    925425276   0     0     0       4206      `
+        .length  85
+        .width   132
+*******************************************************************************
+* die_set.asm V5.11  - DIE register bit value setup subroutine               *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage: dma_sync_set(ch_no, bit_value, r_w);
+*
+*           ch_no     - DMA channel number
+*           bit_value - synchronization interrupt bit value
+*                       includes read and write field
+*           r_w       - 0: read synchronization interrupt
+*                       1: write synchronization interrupt
+*
+*    Register used:     R0, R2, R3, AR0, AR2, BK, RE, DIE
+*
+*    NOTE:  This DMA function subroutine provides user to setup the
+*           DMA synchronization bit value in DIE register.
+*
+*******************************************************************************
+        .globl  _dma_sync_set
+        .text
+*******************************************************************************
+*       void dma_sync_set(int ch_no, int bit_value, int r_w)
+*******************************************************************************
+_dma_sync_set:
+;
+;   If (ch_no == 0), set unmask value and bit_value to proper bit fields
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     0H,RE           ; Set bit_value shift
+        LDI     03H,BK          ; Set read unmask value
+        LDI     *-AR0(2),R2     ; Get bit_value
+        LDI     *-AR0(1),R0     ; Check if ch_no == 0
+        BZD     L1
+        LDI     *-AR0(3),R3     ; Check if r_w == 0
+        .else
+        LDI     0H,RE           ; Set bit_value shift
+        LDI     03H,BK          ; Set read unmask value
+        LDI     AR2,R0          ; Check if ch_no == 0
+        BZD     L1
+        CMPI    0,R3            ; Check if r_w == 0
+        .endif
+        LDINZ   0CH,BK          ; Set write unmask value
+        LDINZ   02H,RE          ; Set bit_value shift
+;
+;   Else if (ch_no == 1), set unmask value and bit_value to proper bit fields
+;
+        CMPI    1,R0            ; Check if ch_no == 1
+        BEQD    L1
+        LSH     4,BK            ; Move unmask value to proper fields
+        LSH     4,R2            ; Move bit_value to proper fields
+        NOP
+;
+;   Else if (ch_no == 2), set unmask value and bit_value to proper bit fields
+;
+        LDI     0700H,BK        ; Set read unmask value
+        LSH     4,R2            ; Move bit_value to proper fields
+        CMPI    2,R0            ; Check if ch_no == 2
+        BEQD    L1
+        CMPI    1,R3            ; Check if r_w == 0
+        LDIEQ   03800H,BK       ; Set write unmask value
+        LDIEQ   03H,RE          ; Set bit_value shift
+;
+;   Else if (ch_no == 3), set unmask value and bit_value to proper bit fields
+;
+        CMPI    3,R0            ; Check if ch_no == 3
+        BEQD    L1
+        LSH     6,BK            ; Move unmask value to proper fields
+        LSH     6,R2            ; Move bit_value to proper fields
+;
+;   Else if (ch_no == 4), set unmask value and bit_value to proper bit fields
+;
+        CMPI    4,R0            ; Check if ch_no == 4
+        BEQD    L1
+        LSH     6,BK            ; Move unmask value to proper fields
+        LSH     6,R2            ; Move bit_value to proper fields
+;
+;   Else if (ch_no == 5), set unmask value and bit_value to proper bit fields
+;
+        CMPI    5,R0            ; Check if ch_no == 5 (Dummy for delay branch)
+        LSH     6,BK            ; Move unmask value to proper fields
+        LSH     6,R2            ; Move bit_value to proper fields
+;
+;   Endif.  Set DIE register.
+;
+L1:
+        POP     AR0             ; Get the return address
+        BUD     AR0             ; Return to caller
+        ANDN    BK,DIE          ; Unmask DIE register fields
+        LSH     RE,R2           ; Set proper read/write bit_value
+        OR      R2,DIE          ; Set bit_value to DIE register
+        .end
+
+
+
+iiof_in.asm/    925425278   0     0     0       1846      `
+        .length  85
+        .width   132
+*******************************************************************************
+* iiof_in.asm V5.11 - input the status of the IIOF pins as general input pin *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  int flag = iiof_in(int ch_no);
+*
+*    input:  ch_no - the channel number of the IIOF pin
+*
+*    output: flag  - the signal value on the IIOF pin
+*
+*    register used - R0, AR0, and AR2
+*
+*    NOTE:  This function subroutine sets Internal Interrupt Flag
+*           (IIF) register as an input port and returns the status
+*           of the IIOF pin.
+*
+*******************************************************************************
+        .globl  _iiof_in
+        .text
+*******************************************************************************
+*       int  flag = iiof_in(int ch_no);
+*******************************************************************************
+_iiof_in:
+;
+;   Set the IIOF as general purpose input pin and return the status of the pin
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the ch_no
+        .endif
+        POP     AR0             ; Get return address
+        LSH     2,AR2           ; Set shift bit size
+        LDI     0FH,R0          ; Get the mask for IIFx function
+        LSH     AR2,R0
+        BUD     AR0             ; Return to caller
+        ANDN    R0,IIF          ; Set IIFx as general input pin
+        AND     IIF,R0          ; Get the IIOF pin status
+        LDINZ   01H,R0          ; Set the return value
+        .end
+
+
+iiof_out.asm/   925425278   0     0     0       2407      `
+        .length  85
+        .width   132
+*******************************************************************************
+* iiof_out.asm V5.11 - output flag to IIOF pins                              *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  iiof_out(int ch_no, int flag);
+*
+*    input:  ch_no - the channel number of the IIOF pin
+*            flag  - output value for the IIOF pin
+*
+*    output: None
+*
+*    register used - R0, R1, R2, AR0, and AR2
+*
+*    NOTE:  This function subroutine sets Internal Interrupt Flag
+*           (IIF) register as an output port and outputs the value
+*           flag to IIOF pin.
+*
+*******************************************************************************
+        .globl  _iiof_out
+        .text
+*******************************************************************************
+*       void iiof_out(int ch_no, int flag)
+*******************************************************************************
+_iiof_out:
+;
+;   Set the IIOF as general purpose output pin and output "flag" to the pin
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the ch_no
+        LDI     *-AR0(2),R2     ; Get the flag
+        .endif
+        POP     AR0             ; Get return address
+        LSH     2,AR2           ; Set shift bit size
+        LSH     2,R2            ; Get the mask for the flag
+        LSH     AR2,R2          ; Set the flag to the right bit field
+        LDI     0FH,R0          ; Get the clear mask for IIFx function
+        LSH     AR2,R0
+        ANDN    R0,IIF          ; Clear IIFx function field
+        LDI     04H,R0          ; Get the bit mask for IIFx function
+        LSH     AR2,R0          ; Shift bit mask to the right bit field
+        AND3    R0,IIF,AR2      ; Get the current flag value
+        XOR     AR2,R2          ; Get the mask for the flag field
+        BUD     AR0             ; Return to caller
+        LSH     -1,R0           ; Set the mask for the I/O field
+        OR      R2,R0           ; Set the mask for the output IIFx
+        XOR     R0,IIF          ; Set the IIFx output value
+        .end
+
+
+
+load_die.asm/   925425278   0     0     0       1516      `
+        .length  85
+        .width   132
+*******************************************************************************
+* load_die.asm V5.11 - DIE register data loading function                    *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  void load_die(unsigned long die_data);
+*
+*    input:  die_data - the data value to be loaded into DIE register
+*
+*    output: None
+*
+*    register used - R0 and AR0
+*
+*    NOTE:  This function subroutine loads the value "die_data" to the DIE
+*           register.
+*
+*******************************************************************************
+        .globl  _load_die
+        .text
+*******************************************************************************
+*       void  load_die(unsigned long die_data);
+*******************************************************************************
+_load_die:
+;
+;   Loads the value "die_data" to the DIE register
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the die_data
+        .endif
+        POP     AR0             ; Get return address
+        BUD     AR0             ; Return to caller
+        LDI     AR2,DIE         ; Put the value to the DIE register
+        NOP
+        NOP
+        .end
+
+
+load_iie.asm/   925425278   0     0     0       1514      `
+        .length  85
+        .width   132
+*******************************************************************************
+* load_iie.asm V5.11 - the interrupt enable register loading function        *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  load_iie(unsigned long iie_value);
+*
+*    input:  iie_value - the value to be loaded into IIE register
+*
+*    output: None
+*
+*    register used - R0, AR0, and AR2
+*
+*    NOTE:  This function subroutine loads the value "iie_value" into
+*           the Internal Interrupt Enable (IIE) register.
+*
+*******************************************************************************
+        .globl  _load_iie
+        .text
+*******************************************************************************
+*       void load_iie(unsigned long iie_value);
+*******************************************************************************
+_load_iie:
+;
+;   Load the value "iie_value into IIE
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the iie_value
+        .endif
+        POP     AR0             ; Get return address
+        BUD     AR0             ; Return to caller
+        LDI     AR2,IIE         ; Load into IIE
+        NOP
+        NOP
+        .end
+
+
+load_iif.asm/   925425278   0     0     0       1510      `
+        .length  85
+        .width   132
+*******************************************************************************
+* load_iif.asm V5.11 - the interrupt flag loading function                   *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  load_iif(unsigned logn iif_value);
+*
+*    input:  iif_value - the value to be loaded into IIF register
+*
+*    output: None
+*
+*    register used - R0, AR0, and AR2
+*
+*    NOTE:  This function subroutine loads the value "iif_value" into
+*           the Internal Interrupt Flag (IIF) register.
+*
+*******************************************************************************
+        .globl  _load_iif
+        .text
+*******************************************************************************
+*       void load_iif(unsigned long iif_value);
+*******************************************************************************
+_load_iif:
+;
+;   Load the value "iif_value into IIF
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the iif_value
+        .endif
+        POP     AR0             ; Get return address
+        BUD     AR0             ; Return to caller
+        LDI     AR2,IIF         ; Load into IIF
+        NOP
+        NOP
+        .end
+
+lock.asm/       925425278   0     0     0       1823      `
+        .length  85
+        .width   132
+*******************************************************************************
+* lock.asm V5.11 - P(S) function of interlock operation subroutine           *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:   flag = lock(int *semaphore)
+*
+*    Input:  *semaphore - Semaphore flag address
+*
+*    Output:  The status of the semaphore flag
+*
+*    Register used:  R0, R2, AR0, AR2
+*
+*    NOTE:    This function implements the P(S) function of interloack
+*             operation. It returns the status of the semaphore flag.
+*             If the semaphore is unlocked (flag == 1), it will lock it
+*             (set to 0).
+*
+*******************************************************************************
+        .globl  _lock
+        .text
+*******************************************************************************
+*       int     lock(int *semaphore)
+*******************************************************************************
+_lock:
+;
+;   Return (*semaphore) and set the S value
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDA     *-AR0(1),AR2    ; Get semaphore address
+        .endif
+        POP     AR0             ; Get retrun address
+        LDII    *AR2,R0         ; Return (*semaphore)
+        LDIZ    0,R2            ; If S == 0, decrement = 0
+        BUD     AR0             ; Return to caller
+        LDINZ   1,R2            ; If S != 0, decrement = 1
+        SUBRI   R0,R2           ; If S != 0, S = S - 1
+        STII    R2,*AR2         ; Update S
+        .end
+
+
+
+pack16.asm/     925425280   0     0     0       3433      `
+        .length  85
+        .width   132
+*******************************************************************************
+* pack16.asm V5.11 - halfword data array pack subroutine                     *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage: pack_halfword(void *message, void *pack_msg, size_t in_size)
+*
+*    Input: *message  - Input data array address
+*           *pack_msg - Output packed data array address
+*           in_size   - Input data array size
+*
+*    Register used: R0, R2, R3, AR0, AR1, AR2, RC, RS, RE
+*
+*    NOTE:  This function provides user to pack the half-word wide data to
+*           full word data FIFO (or Communication port). The data size of
+*           packed data is sent out first. If the input data is not exactly
+*           size of full word data, zeros are appending to the last word.
+*           User needs to provide the input data array length and the
+*           function will return the output packed data array size.
+*
+*******************************************************************************
+        .globl  _pack_halfword
+        .text
+*******************************************************************************
+*       pack_halfword(void *message, void *pack_msg, size_t in_size)
+*******************************************************************************
+_pack_halfword:
+;
+;   Check input data array size
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        NOP
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(3),R0     ; Get input data array length
+        BLED    EPI0_1          ; Exit if size <= 0
+        LDI     *-AR0(2),AR1    ; Get output data array pointer
+        LDI     *-AR0(1),AR2    ; Get input data array pointer
+        .else
+        LDI     R3,R0           ; Get input data array length
+        BLED    EPI0_1          ; Exit if size <= 0
+        LDI     R2,AR1          ; Get output data array pointer
+        .endif
+        AND3    1,R0,R3         ; Save 1 LSBs of input array size
+        LSH     -1,R0           ; Input array size/4
+        BEQD    L3              ; Branch to last word pack if size < 4
+        SUBI    2,R0,RC         ; Repeat size/4 - 1 times
+        ADDI    R3,R0           ; Correct the output array size
+        STI     R0,*AR1         ; Store packed data size to output FIFO
+        CMPI    0,RC            ; If size less than 0,
+        BLT     L2              ;    branch to L2
+;
+;   Half-word wide data array pack routine
+;
+        RPTB    L1              ; Half-word pack loop
+        LWL0    *AR2++,R2       ; Pack lower 16 bits
+        LWL2    *AR2++,R2       ; Pack upper 16 bits
+L1:     STI     R2,*AR1         ; Store packed data to output FIFO
+
+L2:     CMPI    0,R3            ; Check if it is the exactly size
+        BEQD    EPI0_1
+        LWL0    *AR2++,R2       ; Pack lower 16 bits
+        LWL2    *AR2++,R2       ; Pack upper 16 bits
+        STI     R2,*AR1         ; Store packed data to output array
+
+L3:     LHU0    *AR2++,R2       ; Pack last 16 bits with zeros at MSBs
+        STI     R2,*AR1         ; Store packed data to output FIFO
+EPI0_1:
+        RETS                    ; Return to caller
+        .end
+
+
+
+pack8.asm/      925425280   0     0     0       4087      `
+        .length  85
+        .width   132
+*******************************************************************************
+* pack8.asm V5.11  - byte data array pack subroutine                         *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage: pack_byte(void *message, void *pack_msg, size_t in_size)
+*
+*    Input: *message  - Input data array address
+*           *pack_msg - Output packed data array address
+*           in_size   - Input data array size
+*
+*    Register used: R0, R1, R2, R3, AR0, AR1, AR2, RC, RS, RE
+*
+*    NOTE:  This function provides user to pack the byte wide data
+*           to full word wide data FIFO (or Communication port). The
+*           packed data size will be sent out first. If the input
+*           data is not exactly size of full word data, zeros are
+*           appending to the last word. User needs to provide
+*           the input data array length.
+*
+*******************************************************************************
+        .globl  _pack_byte
+        .text
+*******************************************************************************
+*       pack_byte(void *message, void *pack_msg, size_t in_size)
+*******************************************************************************
+_pack_byte:
+;
+;   Check input data array size
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     0,R1            ; Set extra size flag = 0
+        LDI     *-AR0(3),R0     ; Get input data array length
+        BLED    EPI0_1          ; Exit if size <= 0
+        LDI     *-AR0(2),AR1    ; Get output data array pointer
+        LDI     *-AR0(1),AR2    ; Get input data array pointer
+        .else
+        LDI     R3,R0           ; Get input data array length
+        BLED    EPI0_1          ; Exit if size <= 0
+        LDI     R2,AR1          ; Get output data array pointer
+        LDI     0,R1            ; Set extra size flag = 0
+        .endif
+        AND3    3,R0,R3         ; Save 2 LSBs of input array size
+        LDINZ   1,R1            ; Set extra size flag = 1
+        LSH     -2,R0           ; Input array size/4
+        BEQD    L3              ; Branch to last word pack if size < 4
+        SUBI    2,R0,RC         ; Repeat size/4 - 1 times
+        ADDI    R1,R0           ; Correct the output array size
+        STI     R0,*AR1         ; Store packed data size to output FIFO
+        CMPI    0,RC            ; If size less than 0,
+        BLT     L5              ;    branch to L5
+;
+;   Byte wide data array pack routine
+;
+        RPTB    L2              ; Byte data pack loop
+        LWL0    *AR2++,R2       ; Pack byte 0 data
+        LWL1    *AR2++,R2       ; Pack byte 1 data
+        LWL2    *AR2++,R2       ; Pack byte 2 data
+        LWL3    *AR2++,R2       ; Pack byte 3 data
+L2:     STI     R2,*AR1         ; Store packed data to output FIFO
+
+L5:     LWL0    *AR2++,R2       ; Pack byte 0 data
+        LWL1    *AR2++,R2       ; Pack byte 1 data
+        CMPI    0,R3            ; Check if it is the exactly size
+        BEQD    EPI0_1
+        LWL2    *AR2++,R2       ; Pack byte 2 data
+        LWL3    *AR2++,R2       ; Pack byte 3 data
+        STI     R2,*AR1         ; Store packed data to output FIFO
+
+L3:     CMPI    1,R3            ; Check how many byte left? 1 byte?
+        BEQD    L4
+        NOP
+        LBU0    *AR2++,R2       ; Pack byte 0 with zeros at MSBs
+        CMPI    2,R3            ; Check how many byte left? 2 byte?
+        BEQD    L4
+        MB1     *AR2++,R2       ; Pack byte 1 to byte 0 with zeros at MSBs
+        NOP
+        NOP
+        MB2     *AR2++,R2       ; Pack byte 2 to byte1,0 with zeros at MSBs
+L4:
+        STI     R2,*AR1         ; Store packed data to output array
+EPI0_1:
+        RETS                    ; Return to caller
+        .end
+
+
+
+
+
+rst_iie.asm/    925425280   0     0     0       1597      `
+        .length  85
+        .width   132
+*******************************************************************************
+* rst_iie.asm V5.11 - the interrupt enable bit reset function                *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  reset_iie(int enable_bit);
+*
+*    input:  enable_bit - the bit field of the interrupt enable (= 0 - 31)
+*
+*    output: None
+*
+*    register used - R0, AR0, and AR2
+*
+*    NOTE:  This function subroutine reset the enable bit ot the
+*           Internal Interrupt Enable (IIE) register.
+*
+*******************************************************************************
+        .globl  _reset_iie
+        .text
+*******************************************************************************
+*       void reset_iie(int enable_bit)
+*******************************************************************************
+_reset_iie:
+;
+;   Reset the bit "enable_bit" in IIE
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the enable_bit
+        .endif
+        POP     AR0             ; Get return address
+        BUD     AR0             ; Return to caller
+        LDI     1H,R0           ; Get mask
+        LSH     AR2,R0          ; Shift mask to the corresponding bit
+        ANDN    R0,IIE          ; Reset the enable bit
+        .end
+
+
+
+
+rst_iif.asm/    925425280   0     0     0       1587      `
+        .length  85
+        .width   132
+*******************************************************************************
+* rst_iif.asm V5.11 - the interrupt flag reset function                      *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  reset_iif_flag(int flag_bit);
+*
+*    input:  flag_bit - the bit field of the interrupt flag (= 0 - 31)
+*
+*    output: None
+*
+*    register used - R0, AR0, and AR2
+*
+*    NOTE:  This function subroutine reset the flag of the
+*           Internal Interrupt Flag (IIF) register.
+*
+*******************************************************************************
+        .globl  _reset_iif_flag
+        .text
+*******************************************************************************
+*       void reset_iif_flag(int flag_bit)
+*******************************************************************************
+_reset_iif_flag:
+;
+;   Reset the bit "flag_bit" in IIF
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the flag_bit
+        .endif
+        POP     AR0             ; Get return address
+        BUD     AR0             ; Return to caller
+        LDI     1H,R0           ; Get mask
+        LSH     AR2,R0          ; Shift mask to the corresponding bit
+        ANDN    R0,IIF          ; Reset the flag
+        .end
+
+
+rst_ivtp.asm/   925425280   0     0     0       1599      `
+        .length  85
+        .width   132
+*******************************************************************************
+* rst_ivtp.asm V5.11 - IVTP register restore function                        *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  reset_ivtp();
+*
+*    input:  None
+*
+*    register used - R0, AR0, IVTP, DP
+*
+*    NOTE:  This function subroutine restores the IVTP register
+*           from the _ivtp_buf memory location.
+*
+*******************************************************************************
+* -6/20/94: avoided modification of DP register when in small memory model    *
+*******************************************************************************
+          .globl  _reset_ivtp, _ivtp_buf
+
+          .text
+*******************************************************************************
+*         void    reset_ivtp();
+*******************************************************************************
+_reset_ivtp:
+;
+;   Set IVTP to point to the value in _ivtp_buf memory location
+;
+              POP     AR0             ; Get the return address
+              .if .BIGMODEL 
+              LDP     @_ivtp_buf      ; Get the ivtp buffer address
+              .endif
+              BUD     AR0             ; Returen to caller
+              LDI     @_ivtp_buf,R0   ; Get the previous ivtp value
+              LDPE    R0,IVTP         ; Restore the original IVTP value
+              NOP
+              .end
+
+
+
+
+
+rst_tvtp.asm/   925425280   0     0     0       1598      `
+        .length  85
+        .width   132
+*******************************************************************************
+* rst_tvtp.asm V5.11 - TVTP register restore function                        *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  reset_ivtp();
+*
+*    input:  None
+*
+*    register used - R0, AR0, IVTP, DP
+*
+*    NOTE:  This function subroutine restores the TVTP register
+*           from the _tvtp_buf memory location.
+*
+*******************************************************************************
+* -6/20/94: avoided modification of DP register when in small memory model    *
+*******************************************************************************
+          .globl  _reset_tvtp, _tvtp_buf
+
+          .text
+*******************************************************************************
+*         void    reset_tvtp();
+*******************************************************************************
+_reset_tvtp:
+;
+;   Set TVTP to point to the value in _tvtp_buf memory location
+;
+              POP     AR0             ; Get the return address
+              .if (.BIGMODEL)
+              LDP     @_tvtp_buf      ; Get the ivtp buffer address
+              .endif
+              BUD     AR0             ; Returen to caller
+              LDI     @_tvtp_buf,R0   ; Get the previous ivtp value
+              LDPE    R0,TVTP         ; Restore the original IVTP value
+              NOP
+              .end
+
+
+
+rst_vect.asm/   925425282   0     0     0       2790      `
+        .length  85
+        .width   132
+*******************************************************************************
+* rst_vect.asm V5.11 - interrupt vector reset function                       *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  deinstall_int_vector(int N);
+*
+*    input:  N   - The number of the interrupt vector location
+*
+*    register used - R0, R2, AR0, AR1, AR2, DP
+*
+*    NOTE:  This function subroutine restores the previous interrupt
+*           vector from int_vect_buf[] back to the area where the IVTP
+*           points to.
+*
+*******************************************************************************
+* -6/20/94: move RST_VECT_ADR variable to ..bss section to avoid potential DP *
+*           corruption problem when using interrupts with small memory model  *
+*******************************************************************************
+              .global _deinstall_int_vector, _int_vect_buf
+              .text
+*******************************************************************************
+*             void    deinstall_int_vector(int N);
+*******************************************************************************
+_deinstall_int_vector:
+;
+;   Restore INTERRUPT VECTOR from int_vect_buf[] to IVTP SECTION
+;
+              .if     .REGPARM == 0
+              .if     .tmx320C40
+              BUD     $+4             ; Work around for PG1 silicon bug
+              .endif
+              LDA     SP,AR0
+              LDA     *-AR0(1),AR2    ; Get N
+              .endif
+              POP     AR0             ; Get the return address
+              LDEP    IVTP,AR1        ; Get interrupt vector address from IVTP
+              ADDI    AR2,AR1         ; Set the interrupt vector location
+              .if .BIGMODEL
+              LDPK    @RST_VECT_ADR   ; Get the interrupt vector buffer addr
+              .endif
+              LDI     @RST_VECT_ADR,R2
+              BUD     AR0             ; Returen to caller
+              ADDI    R2,AR2          ; Set the interrupt vector buffer addr
+              LDI     *AR2,R2         ; Get the previous interrupt vector
+              STI     R2,*AR1         ; Restore the previous interrupt vector
+
+;
+; Set-up Iinterrupt vector buffer address
+;
+              .if .BIGMODEL           ; If BIG MODEL put word in .text section
+RST_VECT_ADR: .word   _int_vect_buf
+              .else                   ; For small model create word in .bss
+              .bss RST_VECT_ADR,1
+              .sect ".cinit"
+              .word 1,RST_VECT_ADR
+              .word _int_vect_buf
+              .endif
+
+
+              .end
+
+set_iie.asm/    925425282   0     0     0       1582      `
+        .length  85
+        .width   132
+*******************************************************************************
+* set_iie.asm V5.11 - the interrupt enable setup function                    *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  set_iie(int enable_bit);
+*
+*    input:  enable_bit - the bit field of the interrupt enable (= 0 - 31)
+*
+*    output: None
+*
+*    register used - R0, AR0, and AR2
+*
+*    NOTE:  This function subroutine sets the enable bit of the
+*           Internal Interrupt Enable (IIE) register.
+*
+*******************************************************************************
+        .globl  _set_iie
+        .text
+*******************************************************************************
+*       void set_iie(int enable_bit)
+*******************************************************************************
+_set_iie:
+;
+;   Set the bit "enable_bit" in IIE
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the enable_bit
+        .endif
+        POP     AR0             ; Get return address
+        BUD     AR0             ; Return to caller
+        LDI     1H,R0           ; Get mask
+        LSH     AR2,R0          ; Shift mask to the corresponding bit
+        OR      R0,IIE          ; Set the enable bit
+        .end
+
+
+set_iif.asm/    925425282   0     0     0       1576      `
+        .length  85
+        .width   132
+*******************************************************************************
+* set_iif.asm V5.11 - the interrupt flag setup function                      *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  set_iif_flag(int flag_bit);
+*
+*    input:  flag_bit - the bit field of the interrupt flag (= 0 - 31)
+*
+*    output: None
+*
+*    register used - R0, AR0, and AR2
+*
+*    NOTE:  This function subroutine sets the flag of the
+*           Internal Interrupt Flag (IIF) register.
+*
+*******************************************************************************
+        .globl  _set_iif_flag
+        .text
+*******************************************************************************
+*       void set_iif_flag(int flag_bit)
+*******************************************************************************
+_set_iif_flag:
+;
+;   Set the bit "flag_bit" in IIF
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the flag_bit
+        .endif
+        POP     AR0             ; Get return address
+        BUD     AR0             ; Return to caller
+        LDI     1H,R0           ; Get mask
+        LSH     AR2,R0          ; Shift mask to the corresponding bit
+        OR      R0,IIF          ; Set the flag
+        .end
+
+
+set_iiof.asm/   925425282   0     0     0       2174      `
+        .length  85
+        .width   132
+*******************************************************************************
+* set_iiof.asm V5.11 - the IIOF pins setup function                          *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  set_iiof(int ch_no, int iiof_value);
+*
+*    input:  ch_no - pin number (0-3) of the IIOF pins
+*            iiof_value - the value to be loaded into the IIOF field of
+*                         the IIF register
+*
+*    output: None
+*
+*    register used - R0, R1, R2, AR0, and AR2
+*
+*    NOTE:  This function subroutine loads the value "iif_value" into
+*           the IIOF field of the Internal Interrupt Flag (IIF) register.
+*           User can use it to setup the IIOF pins for external interrupt.
+*
+*******************************************************************************
+        .globl  _set_iiof
+        .text
+*******************************************************************************
+*       void set_iiof(int ch_no, int iiof_value);
+*******************************************************************************
+_set_iiof:
+;
+;   Load the value "iiof_value into IIOF field of the IIF register
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(1),AR2    ; Get the ch_no
+        LDI     *-AR0(2),R2     ; Get the iiof_value
+        .endif
+        POP     AR0             ; Get return address
+        LSH     2,AR2           ; Setup the shift bit value
+        LSH     AR2,R2          ; Shift the mask to right channel field
+        LDI     0FH,R0          ; Get the mask
+        LSH     AR2,R0          ; Shift the clear mask to the right fields
+        BUD     AR0             ; Return to caller
+        AND     IIF,R0          ; Get the current bits value
+        XOR     R0,R2           ; Get the mask for the IIOF function
+        XOR     R2,IIF          ; Set the IIOF function
+        .end
+
+
+set_ivtp.asm/   925425282   0     0     0       3171      `
+        .length  85
+        .width   132
+*******************************************************************************
+* set_ivtp.asm V5.11 - IVTP register setup function                          *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  set_ivtp(void *int_vect);
+*
+*    input:  int_vect - interrupt vector memory location (must be
+*                       in 512 boundary)
+*
+*    register used - R0, AR0, AR2, IVTP, DP
+*
+*    NOTE:  This function subroutine provides user to set up
+*           the IVTP register pointing to *int_vect location.
+*           If the input location is DEFAULT ( = -1), the IVTP
+*           is set to .vector section. The original IVTP value
+*           is saved in _ivtp_buf.
+*
+*******************************************************************************
+* -6/20/94: move VEC_ADR variable to .bss section to avoid potential DP       *
+*  corruption problem when using interrupts with small memory model           *
+*******************************************************************************
+          .globl  _set_ivtp, __vector, _ivtp_buf
+
+          .text
+*******************************************************************************
+*         void    set_ivtp(void *int_vect);
+*******************************************************************************
+_set_ivtp:
+;
+;   Set IVTP to point to *int_vect or .vector section
+;
+              .if     .REGPARM == 0
+              .if     .tmx320C40
+              BUD     $+4             ; Work around for PG1 silicon bug
+              .endif
+              LDA     SP,AR0
+              LDA     *-AR0(1),AR2    ; Get *int_vect
+              .endif
+              POP     AR0             ; Get the return address
+              .if .BIGMODEL
+              LDP     @VEC_ADR        ; Get data page pointer
+              .endif
+              LDEP    IVTP,R0         ; Get original IVTP value
+              CMPI    -1,AR2          ; Check if DEFAULT is used
+              .if .BIGMODEL
+              LDIEQ   @VEC_ADR,AR2    ; If so, load .vector section address
+              BUD     AR0             ; Returen to caller
+              LDPE    AR2,IVTP        ; Set new IVTP value
+              LDPK    @_ivtp_buf      ; Get the ivtp buffer address
+              STI     R0,@_ivtp_buf   ; Save the previous ivtp value
+              .else
+              BUD     AR0             ; Returen to caller
+              LDIEQ   @VEC_ADR,AR2    ; If so, load .vector section address
+              LDPE    AR2,IVTP        ; Set new IVTP value
+              STI     R0,@_ivtp_buf   ; Save the previous ivtp value
+              .endif
+
+;
+;  Establish Vector Address
+;
+              .if .BIGMODEL           ; If BIGMODEL create word in .text
+VEC_ADR:      .word   __vector
+              .else
+              .bss VEC_ADR,1          ; For small model place word in .bss
+              .sect ".cinit"
+              .word 1,VEC_ADR
+              .word __vector
+              .endif
+              .end
+
+
+
+
+set_tvtp.asm/   925425282   0     0     0       2388      `
+        .length  85
+        .width   132
+*******************************************************************************
+* set_tvtp.asm V5.11 - TVTP register setup function                          *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  set_tvtp(void *trap_vect);
+*
+*    input:  trap_vect - trap vector memory location (must be in 512 boundary)
+*
+*    register used - R0, AR0, AR2, TVTP, DP
+*
+*    NOTE:  This function subroutine provides user to set up
+*           the TVTP register pointing to *trap_vect location.
+*           The original TVTP value is saved in _tvtp_buf.
+*
+*******************************************************************************
+* -6/20/94: avoided modification of DP register when in small memory model    *
+*******************************************************************************
+          .globl  _set_tvtp, _tvtp_buf
+
+          .text
+*******************************************************************************
+*         void    set_tvtp(void *trap_vect);
+*******************************************************************************
+_set_tvtp:
+;
+;   Set TVTP to point to *trap_vect
+;
+              .if     .REGPARM == 0
+              .if     .tmx320C40
+              BUD     $+4             ; Work around for PG1 silicon bug
+              .endif
+              LDA     SP,AR0
+              LDA     *-AR0(1),AR2    ; Get *trap_vect
+              .endif
+              POP     AR0             ; Get the return address
+              .if (.BIGMODEL)
+              PUSH    DP              ; Save DP
+              LDEP    TVTP,R0         ; Get original TVTP value
+              LDPE    AR2,TVTP        ; Set new TVTP value
+              BUD     AR0             ; Returen to caller
+              LDPK    @_tvtp_buf      ; Get the ivtp buffer address
+              STI     R0,@_tvtp_buf   ; Save the previous tvtp value
+              POP     DP
+              .else
+              BUD     AR0             ; Returen to caller
+              LDEP    TVTP,R0         ; Get original TVTP value
+              LDPE    AR2,TVTP        ; Set new TVTP value
+              STI     R0,@_tvtp_buf   ; Save the previous tvtp value
+              .endif
+              .end
+
+
+
+set_vect.asm/   925425284   0     0     0       2883      `
+        .length  85
+        .width   132
+*******************************************************************************
+* set_vect.asm V5.11 - interrupt vector setup function                       *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:  install_int_vector(void *isr, int N);
+*
+*    input:  *isr - Interrupt service routine address
+*             N   - The number of the interrupt vector location
+*
+*    register used - R0, R2, AR0, AR1, AR2, DP
+*
+*    NOTE:  This function subroutine provides user to set up
+*           the interrupt vector into the section where IVTP points to
+*           and save the previous vector to int_vect_buf[]
+*
+*******************************************************************************
+*-6/20/94: move INT_VECT_ADR variable to .bss section to avoid potential DP   *
+* corruption problem when using interrupts with small memory model            *
+*******************************************************************************
+              .global _install_int_vector, _int_vect_buf
+              .text
+*******************************************************************************
+*             void    install_int_vector(void *isr, int N);
+*******************************************************************************
+_install_int_vector:
+;
+;   Set INTERRUPT VECTOR *isr to .vector SECTION
+;
+              .if     .REGPARM == 0
+              .if     .tmx320C40
+              BUD     $+4             ; Work around for PG1 silicon bug
+              .endif
+              LDA     SP,AR0
+              LDA     *-AR0(1),AR2    ; Get *isr
+              LDI     *-AR0(2),R2     ; Get N
+              .endif
+              POP     R0              ; Get the return address
+              LDEP    IVTP,AR1        ; Get interrupt vector address from IVTP
+              ADDI    R2,AR1          ; Set the interrupt vector location
+              .if .BIGMODEL
+              LDPK    @SET_VECT_ADR   ; Get the interrupt vector buffer addr
+              .endif
+              LDI     @SET_VECT_ADR,AR0
+              ADDI    R2,AR0          ; Set the interrupt vector buffer addr
+              BUD     R0              ; Returen to caller
+              LDI     *AR1,R2         ; Get the previous interrupt vector
+              STI     AR2,*AR1        ; Load *isr to interrupt vector location
+              STI     R2,*AR0         ; Save the previous interrupt vector
+
+;
+;  Set interrupt vector address
+;
+              .if .BIGMODEL
+SET_VECT_ADR: .word   _int_vect_buf
+              .else
+              .bss SET_VECT_ADR,1
+              .sect ".cinit"
+              .word 1,SET_VECT_ADR
+              .word _int_vect_buf
+              .endif
+              .end
+
+
+
+
+unlock.asm/     925425284   0     0     0       1527      `
+        .length  85
+        .width   132
+*******************************************************************************
+* unlock.asm V5.11 - V(S) function of interlock operation subroutine         *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage:   unlock(int *semaphore)
+*
+*    Input:  *semaphore - Semaphore flag address
+*
+*    Register used:  R2, AR0, AR2
+*
+*    NOTE:    This function implements the V(S) function of interloack
+*             operation. It unlocks the semaphore flag (set to 1).
+*
+*******************************************************************************
+        .globl  _unlock
+        .text
+*******************************************************************************
+*       void     unlock(int *semaphore)
+*******************************************************************************
+_unlock:
+;
+;   Set the S value (S = S + 1)
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDA     *-AR0(1),AR2    ; Get semaphore address
+        .endif
+        POP     AR0             ; Get return address
+        BUD     AR0             ; Return to caller
+        LDII    *AR2,R2         ; Get semaphore flag S
+        ADDI    1,R2            ; S + 1 --> S
+        STII    R2,*AR2         ; Update S
+        .end
+
+
+
+unpack16.asm/   925425284   0     0     0       3562      `
+        .length  85
+        .width   132
+*******************************************************************************
+* unpack16.asm V5.11  - halfword data array unpack subroutine                *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage: size = 
+*           unpack_halfword(void volatile *pack_msg, void *msg, size_t in_size)
+*
+*    Input: *pack_msg  - Input packed data array address
+*           *msg       - Output unpacked data array address
+*           in_size    - Input data array size
+*
+*    Output: Unpacked data array size is returned to caller
+*
+*    Register used:   R0, R2, R3, AR0, AR1, AR2, RC, RS, RE
+*
+*    NOTE:  This function provides user to unpack data from FIFO (or
+*           Communication port) to the half-word wide data array.
+*           User needs to provide the input data array length and the
+*           function will return the output unpacked data array size.
+*
+*******************************************************************************
+        .globl  _unpack_halfword
+        .text
+*******************************************************************************
+*       size_t unpack_halfword(void volatile *pack_msg, void *msg, size_t in_size)
+*******************************************************************************
+_unpack_halfword:
+;
+;   Check input data array size
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(3),RC     ; Get input data array length
+        CMPI    1,RC            ; Check input data length
+        BLT     EPI0_1          ; Exit if size <= 0
+        BEQD    L3              ; Branch to
+        LDI     *-AR0(1),AR2    ; Get input data array pointer
+        LDI     *-AR0(2),AR1    ; Get output data array pointer
+        LSH     1,RC,R0         ; Output size = input array size * 2
+        SUBI    2,RC            ; Repeat size - 1 times
+        .else
+        CMPI    1,R3            ; Check input data length
+        BLT     EPI0_1          ; Exit if size <= 0
+        BEQD    L3              ; Branch to last word unpack if size == 1
+        LDI     R2,AR1          ; Get output data array pointer
+        SUBI    2,R3,RC         ; Repeat size - 1 times
+        LSH     1,R3,R0         ; Output size = input array size * 2
+        .endif
+;
+;   Half-word wide data array unpack routine
+;
+        RPTB    L1              ; Half-word unpack loop
+        LDI     *AR2,R3         ; Get the data
+        LH0     R3,R2           ; Unpack lower 16 bits
+        STI     R2,*AR1++       ; Store unpacked data to output array
+        LH1     R3,R2           ; Unpack upper 16 bits
+L1:     STI     R2,*AR1++       ; Store unpacked data to output array
+
+L3:     LDI     *AR2,R3         ; Get the last data
+        LH1     R3,R2           ; Check if the 16 MSBs of last word exist
+        BZD     EPI0_1          ; If it is zero, goto the end
+        LH0     R3,RC           ; Unpack lower 16 bits of last word
+        STI     RC,*AR1++       ; Store unpacked data to output array
+        SUBI    1,R0            ; Subtract 1 to output array size
+        STI     R2,*AR1++       ; Store the 16 MSBs of the last word
+        ADDI    1,R0            ; Add 1 to output array size
+EPI0_1:
+        RETS                    ; Return to caller
+        .end
+
+
+unpack8.asm/    925425284   0     0     0       4393      `
+        .length  85
+        .width   132
+*******************************************************************************
+* unpack8.asm V5.11  - byte data array unpack subroutine                     *
+* Copyright (c) 1992-1999 Texas Instruments Incorporated                      *
+*******************************************************************************
+*
+*    usage: size = 
+*               unpack_byte(void volatile *pack_msg, void *msg, size_t in_size)
+*
+*    Input: *pack_msg  - Input packed data array address
+*           *msg       - Output unpacked data array address
+*           in_size    - Input data array size
+*
+*    Output: Unpacked data array size is returned to caller
+*
+*    Register used:   R0, R2, R3, AR0, AR1, AR2, RC, RS, RE
+*
+*    NOTE:  This function provides user to unpack data array to
+*           the byte wide data array.
+*           User needs to provide the input data array length and the
+*           function will return the output unpacked data array size.
+*
+*******************************************************************************
+        .globl  _unpack_byte
+        .text
+*******************************************************************************
+*       size_t unpack(void volatile *pack_msg, void *msg, size_t in_size)
+*******************************************************************************
+_unpack_byte:
+;
+;   Check input data array size
+;
+        .if     .REGPARM == 0
+        .if     .tmx320C40
+        BUD     $+4             ; Work around for PG1 silicon bug
+        .endif
+        LDA     SP,AR0
+        LDI     *-AR0(3),RC     ; Get input data array length
+        CMPI    1,RC            ; Check input data length
+        BLT     EPI0_1          ; Exit if size <= 0
+        BEQD    L3              ; Branch to last word unpack if size == 1
+        LDI     *-AR0(1),AR2    ; Get input data array pointer
+        LDI     *-AR0(2),AR1    ; Get output data array pointer
+        LSH     2,RC,R0         ; Output size = input array size * 4
+        SUBI    2,RC            ; Repeat size - 1 times
+        .else
+        CMPI    1,R3            ; Check input data length
+        BLT     EPI0_1          ; Exit if size <= 0
+        BEQD    L3              ; Branch to
+        LDI     R2,AR1          ; Get output data array pointer
+        LSH     2,R3,R0         ; Output size = input array size * 4
+        SUBI    2,R3,RC         ; Repeat size - 1 times
+        .endif
+;
+;   Byte wide data array unpack routine
+;
+        RPTB    L2              ; Byte unpack loop
+        LDI     *AR2,R3         ; Get the data
+        LB0     R3,R2           ; Unpack byte 0 data
+        STI     R2,*AR1++       ; Store unpacked data to output array
+        LB1     R3,R2           ; Unpack byte 1 data
+        STI     R2,*AR1++       ; Store unpacked data to output array
+        LB2     R3,R2           ; Unpack byte 2 data
+        STI     R2,*AR1++       ; Store unpacked data to output array
+        LB3     R3,R2           ; Unpack byte 3 data
+L2:     STI     R2,*AR1++       ; Store unpacked data to output array
+
+L3:     LDI     *AR2,R3         ; Get the last data
+        LB1     R3,R2           ; Check if byte 1 of last word exist
+        BZD     EPI0_1          ; If it is zero, goto the end
+        LB0     R3,R2           ; Unpack byte 0 of last word
+        STI     R2,*AR1++       ; Store unpacked data to output array
+        SUBI    3,R0            ; Subtract 1 to output array size
+        LB2     R3,R2           ; Check if byte 2 of last word exist
+        BZD     EPI0_1          ; If it is zero, goto the end
+        LB1     R3,R2           ; Unpack byte 1 of last word
+        STI     R2,*AR1++       ; Store unpacked data to output array
+        ADDI    1,R0            ; Add 1 to output array size
+        LB3     R3,R2           ; Check if byte 3 of last word exist
+        BZD     EPI0_1          ; If it is zero, goto the end
+        LB2     R3,RC           ; Unpack byte 2 of last word
+        STI     RC,*AR1++       ; Store unpacked data to output array
+        ADDI    1,R0            ; Add 1 to output array size
+        STI     R2,*AR1++       ; Store unpacked data to output array
+        ADDI    1,R0            ; Add 1 to output array size
+EPI0_1:
+        RETS                    ; Return to caller
+        .end
+
+
+
+alarm.c/        925425256   0     0     0       810       `
+/****************************************************************************/
+/* alarm.c V5.11                                                           */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+
+void alarm(float x)
+{
+    TIMER_REG  *tim_ptr = TIMER_BASE;          /* TIMER 0 REGISTER POINTER  */
+
+    /*----------------------------------------------------------------------*/
+    /*  START THE TIMER FUNCTION                                            */
+    /*----------------------------------------------------------------------*/
+    tim_ptr->period   = (unsigned int)(x * TIMER_CLOCK);
+    tim_ptr->gcontrol = TIM_START;
+}
+
+
+
+chk_aux.c/      925425256   0     0     0       747       `
+/****************************************************************************/
+/* chk_aux.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <dma40.h>
+
+int chk_aux_dma(int ch_no)
+{
+    /*--------------------------------------------------------------------*/
+    /*  SEND UP DMA POINTER AND CHECK ON THE START FIELD FIELD            */
+    /*--------------------------------------------------------------------*/
+    DMA_REG   *dma_ptr = DMA_ADDR(ch_no);
+    return  ((dma_ptr->gcontrol & 0x03000000) == 0x03000000);
+}
+
+
+
+
+
+
+
+
+chk_dma.c/      925425256   0     0     0       817       `
+/****************************************************************************/
+/* chk_dma.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <dma40.h>
+
+int chk_dma(int ch_no)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SEND UP DMA POINTER AND CHECK ON THE START FIELD                    */
+    /*----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr = DMA_ADDR(ch_no);             /* DMA REGISTER POINTER */
+    return  (dma_ptr->gcontrol_bit.start == 3 |
+             dma_ptr->gcontrol_bit.aux_start == 3);
+}
+
+
+
+
+chk_pri.c/      925425256   0     0     0       776       `
+/****************************************************************************/
+/* chk_pri.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <dma40.h>
+
+int chk_pri_dma(int ch_no)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SEND UP DMA POINTER AND CHECK ON THE START FIELD FIELD              */
+    /*----------------------------------------------------------------------*/
+    DMA_REG   *dma_ptr = DMA_ADDR(ch_no);          /* DMA REGISTER POINTER  */
+    return  ((dma_ptr->gcontrol & 0x0C00000) == 0x0C00000);
+}
+
+cnt_down.c/     925425256   0     0     0       806       `
+/****************************************************************************/
+/* cnt_down.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+
+void count_down(int t, unsigned long x)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP TIMER REGISTER POINTER AND START THE TIMER FUNCTION          */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);         /* TIMER REGISTER POINTER  */
+    tim_ptr->period     = x/2;
+    tim_ptr->gcontrol   = TIM_START;
+}
+
+
+
+
+cnt_left.c/     925425258   0     0     0       770       `
+/****************************************************************************/
+/* cnt_left.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+
+int count_left(int t)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP TIMER REGISTER POINTER AND RETURN (PERIOD - COUNTER) VALUE   */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);         /* TIMER REGISTER POINTER  */
+    return ((tim_ptr->period - tim_ptr->counter)*2);
+}
+
+
+
+cpinbuf.c/      925425258   0     0     0       833       `
+/*****************************************************************************/
+/* cpinbuf.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                    */
+/*****************************************************************************/
+#undef   _INLINE
+#include <compt40.h>
+
+int cp_in_level(int ch_no)
+{
+    int     level;
+
+    /*-----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND RETURN THE INPUT LEVEL                  */
+    /*-----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER     */
+    level  = cp_ptr->gcontrol_bit.in_level;
+    return (level == 15) ? 8 : level;
+}
+
+
+
+cpingo.c/       925425258   0     0     0       759       `
+/****************************************************************************/
+/* cpingo.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <compt40.h>
+
+void cp_in_release(int ch_no)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND UNHALT THE INPUT FIFO                  */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER    */
+    cp_ptr->gcontrol_bit.ich = 0;
+}
+
+
+
+
+cpinhlt.c/      925425258   0     0     0       758       `
+/****************************************************************************/
+/* cpinhlt.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <compt40.h>
+
+void cp_in_halt(int ch_no)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND HALT THE INPUT FIFO                    */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER    */
+    cp_ptr->gcontrol_bit.ich = 1;
+}
+
+
+
+
+cpoutbuf.c/     925425258   0     0     0       835       `
+/****************************************************************************/
+/* cpoutbuf.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <compt40.h>
+
+int cp_out_level(int ch_no)
+{
+    int     level;
+
+    /*----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND RETURN THE OUTPUT LEVEL                */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER    */
+    level  = cp_ptr->gcontrol_bit.out_level;
+    return (level == 15) ? 8 : level;
+
+}
+
+
+
+
+
+
+cpoutgo.c/      925425258   0     0     0       762       `
+/****************************************************************************/
+/* cpoutgo.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <compt40.h>
+
+void cp_out_release(int ch_no)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND UNHALT THE OUTPUT FIFO                 */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER    */
+    cp_ptr->gcontrol_bit.och = 0;
+}
+
+
+
+
+cpouthlt.c/     925425258   0     0     0       755       `
+/****************************************************************************/
+/* cpouthlt.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <compt40.h>
+
+void cp_out_halt(int ch_no)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP COMM PORT POINTER AND HALT THE OUTPUT FIFO                   */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER    */
+    cp_ptr->gcontrol_bit.och = 1;
+}
+
+
+
+cpvars.c/       925425260   0     0     0       431       `
+/****************************************************************************/
+/* cpvars.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include     <compt40.h>
+
+size_t       msg_size[6];           /* GLOBAL MEMORY FOR MESSAGE SIZE       */
+
+
+
+dma_aux.c/      925425260   0     0     0       996       `
+/****************************************************************************/
+/* dma_aux.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+
+void dma_auxgo(int ch_no, DMA_AUX_REG *reg)
+{
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND START DMA FUNCTION            */
+    /*----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr = DMA_ADDR(ch_no);         /* DMA REGISTER POINTER     */
+    DMA_AUX_RESET(ch_no);
+    dma_ptr->dma_regs.dst     = reg->dma_dst;
+    dma_ptr->dma_regs.dst_idx = reg->dma_dst_idx;
+    dma_ptr->dma_aux_count    = reg->dma_aux_count;
+    dma_ptr->dma_aux_link     = reg->dma_aux_link;
+    dma_ptr->gcontrol         = reg->gcontrol;
+}
+
+
+
+dma_fft.c/      925425260   0     0     0       1783      `
+/****************************************************************************/
+/* dma_fft.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+
+void dma_cmplx(int ch_no, void *src, void  *dest, size_t fft_size, int priority)
+{
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND AUTOINIT TABLE                */
+    /*----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr         = DMA_ADDR(ch_no);    /* DMA REGISTER POINTER  */
+    AUTOINIT *table          = &auto_tab[ch_no];   /* GLOBAL AUTOINIT TABLE */
+
+    table->ctrl1             = (DMA_CMPLX_REAL | priority);
+    table->dma_mesg1.src     = src;
+    table->dma_mesg1.src_idx = 2;
+    table->dma_mesg1.count   = fft_size;
+    table->dma_mesg1.dst     = dest;
+    table->dma_mesg1.dst_idx = fft_size;
+    table->link1             = &table->ctrl2;
+
+    table->ctrl2             = (DMA_CMPLX_IMGN | priority);
+    table->dma_mesg2.src     = (long *)src+1;
+    table->dma_mesg2.src_idx = 2;
+    table->dma_mesg2.count   = fft_size;
+    table->dma_mesg2.dst     = (long *)dest+1;
+    table->dma_mesg2.dst_idx = fft_size;
+
+    /*----------------------------------------------------------------------*/
+    /* START DMA FUNCTION TO DO COMPLEX FFT TRANSFER                        */
+    /*----------------------------------------------------------------------*/
+    dma_ptr->dma_regs.count = 0;
+    dma_ptr->dma_link       = &table->ctrl1;
+    dma_ptr->gcontrol       = DMA_CMPLX_REAL;
+}
+
+
+
+dma_go.c/       925425260   0     0     0       854       `
+/****************************************************************************/
+/* dma_go.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+
+void dma_go(int ch_no, DMA_REG *reg)
+{
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND START DMA FUNCTION            */
+    /*----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr  = DMA_ADDR(ch_no);        /* DMA REGISTER POINTER     */
+    DMA_RESET(ch_no);
+    dma_ptr->dma_regs = reg->dma_regs;
+    dma_ptr->dma_link = reg->dma_link;
+    dma_ptr->gcontrol = reg->gcontrol;
+}
+
+
+
+dma_move.c/     925425260   0     0     0       978       `
+/****************************************************************************/
+/* dma_move.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+
+void dma_move(int ch_no, void *src, void *dest, size_t length)
+{
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND START DMA FUNCTION            */
+    /*----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr          = DMA_ADDR(ch_no);    /* DMA REGISTER POINTER */
+
+    dma_ptr->dma_regs.src     = src;
+    dma_ptr->dma_regs.count   = length;
+    dma_ptr->dma_regs.dst     = dest;
+    dma_ptr->dma_regs.dst_idx = 1;
+    dma_ptr->dma_regs.src_idx = 1;
+    dma_ptr->gcontrol         = DMA_MOVE_CONTROL;
+}
+
+
+dma_pri.c/      925425260   0     0     0       984       `
+/****************************************************************************/
+/* dma_pri.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+
+void dma_prigo(int ch_no, DMA_PRI_REG *reg)
+{
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND START DMA FUNCTION            */
+    /*----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr          = DMA_ADDR(ch_no);    /* DMA REGISTER POINTER */
+    DMA_RESET(ch_no);
+    dma_ptr->dma_regs.src     = reg->dma_src;
+    dma_ptr->dma_regs.src_idx = reg->dma_src_idx;
+    dma_ptr->dma_regs.count   = reg->dma_count;
+    dma_ptr->dma_link         = reg->dma_link;
+    dma_ptr->gcontrol         = reg->gcontrol;
+}
+
+
+
+dma_seta.c/     925425262   0     0     0       1015      `
+/****************************************************************************/
+/* dma_seta.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <dma40.h>
+
+void set_aux_auto(void *tab_addr, long   ctrl,   void *dest, int dest_idx,
+                                  size_t length, void *next_tab)
+{
+    DMA_AUX_REG *table = tab_addr;               /* DMA AUTOINIT LINK TABLE */
+
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA SPLIT MODE AUTOINIT TABLE FOR AUXILIARY CHANNEL            */
+    /*----------------------------------------------------------------------*/
+    table->gcontrol      = ctrl;
+    table->dma_dst       = dest;
+    table->dma_dst_idx   = dest_idx;
+    table->dma_aux_count = length;
+    table->dma_aux_link  = next_tab;
+
+}
+
+
+
+dma_setp.c/     925425262   0     0     0       1001      `
+/****************************************************************************/
+/* dma_setp.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <dma40.h>
+
+void set_pri_auto(void *tab_addr, long   ctrl,   void *src, int src_idx,
+                                  size_t length, void *next_tab)
+{
+    DMA_PRI_REG *table = tab_addr;               /* DMA AUTOINIT LINK TABLE */
+
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA SPLIT MODE AUTOINIT TABLE FOR PRIMARY CHANNEL              */
+    /*----------------------------------------------------------------------*/
+    table->gcontrol    = ctrl;
+    table->dma_src     = src;
+    table->dma_src_idx = src_idx;
+    table->dma_count   = length;
+    table->dma_link    = next_tab;
+
+}
+
+
+
+dma_setu.c/     925425262   0     0     0       1098      `
+/****************************************************************************/
+/* dma_setu.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+
+void set_dma_auto(void  *tab_addr, long  ctrl, void *src, int src_idx,
+                  size_t length,   void *dest, int   dest_idx, void *next_tab)
+{
+    DMA_REG  *table = tab_addr;               /* DMA AUTOINIT LINK TABLE    */
+
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA UNIFIED MODE AUTOINIT TABLE                                */
+    /*----------------------------------------------------------------------*/
+    table->gcontrol         = ctrl;
+    table->dma_regs.src     = src;
+    table->dma_regs.src_idx = src_idx;
+    table->dma_regs.count   = length;
+    table->dma_regs.dst     = dest;
+    table->dma_regs.dst_idx = dest_idx;
+    table->dma_link         = next_tab;
+
+}
+
+
+dma_trig.c/     925425262   0     0     0       2180      `
+/****************************************************************************/
+/* dma_trig.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+
+void dma_extrig(int ex_int, int ch_no, DMA_REG *reg)
+{
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND AUTOINIT TABLE                */
+    /*----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr = DMA_ADDR(ch_no);       /* DMA REGISTER POINTER       */
+    AUTOINIT *table  = &auto_tab[ch_no];      /* DMA AUTOINIT LINK TABLE    */
+
+    table->ctrl1              = DMA_INT_TRIG;
+    table->dma_mesg1.src      = DMA_TRIG_ADDR;
+    table->dma_mesg1.src_idx  = 1;
+    table->dma_mesg1.count    = 1;
+    table->dma_mesg1.dst      = DMA_TRIG_ADDR;
+    table->dma_mesg1.dst_idx  = 1;
+    table->link1              = &table->ctrl2;
+
+    table->ctrl2              = reg->gcontrol;
+    table->dma_mesg2.src      = reg->dma_regs.src;
+    table->dma_mesg2.src_idx  = reg->dma_regs.src_idx;
+    table->dma_mesg2.count    = reg->dma_regs.count;
+    table->dma_mesg2.dst      = reg->dma_regs.dst;
+    table->dma_mesg2.dst_idx  = reg->dma_regs.dst_idx;
+    table->link2              = reg->dma_link;
+
+    /*----------------------------------------------------------------------*/
+    /* SETUP DIE REGISTER FOR INTERRUPT TRIGGER                             */
+    /*----------------------------------------------------------------------*/
+    ex_int += (ch_no == 1) ? 0 : 2;
+    dma_sync_set(ch_no, ex_int, 0);
+
+    /*----------------------------------------------------------------------*/
+    /* START DMA FUNCTION TO WAIT FOR EXTERNAL INTERRUPT                    */
+    /*----------------------------------------------------------------------*/
+    DMA_RESET(ch_no);
+    dma_ptr->dma_regs.count = 0;
+    dma_ptr->dma_link       = &table->ctrl1;
+    dma_ptr->gcontrol       = DMA_INT_TRIG;
+
+}
+
+dmaintmv.c/     925425262   0     0     0       2079      `
+/****************************************************************************/
+/* dmaintmv.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+
+void dma_int_move(int ex_int, int ch_no, void *src, void *dest, size_t length)
+{
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND AUTOINIT TABLE                */
+    /*----------------------------------------------------------------------*/
+    DMA_REG  *dma_ptr         = DMA_ADDR(ch_no);    /* DMA REG POINTER     */
+    AUTOINIT *table           = &auto_tab[ch_no];   /* GLOBAL AUTOINIT TAB */
+
+    table->ctrl1              = DMA_INT_TRIG;
+    table->dma_mesg1.src      = DMA_TRIG_ADDR;
+    table->dma_mesg1.src_idx  = 1;
+    table->dma_mesg1.count    = 1;
+    table->dma_mesg1.dst      = DMA_TRIG_ADDR;
+    table->dma_mesg1.dst_idx  = 1;
+    table->link1              = &table->ctrl2;
+
+    table->ctrl2              = DMA_MOVE_CONTROL;
+    table->dma_mesg2.src      = src;
+    table->dma_mesg2.src_idx  = 1;
+    table->dma_mesg2.count    = length;
+    table->dma_mesg2.dst      = dest;
+    table->dma_mesg2.dst_idx  = 1;
+
+    /*----------------------------------------------------------------------*/
+    /* SETUP DIE REGISTER FOR INTERRUPT TRIGGER                             */
+    /*----------------------------------------------------------------------*/
+    ex_int += (ch_no == 1) ? 0 : 2;
+    dma_sync_set(ch_no, ex_int, 0);
+
+    /*----------------------------------------------------------------------*/
+    /* START DMA FUNCTION TO WAIT FOR EXTERNAL INTERRUPT                    */
+    /*----------------------------------------------------------------------*/
+    DMA_RESET(ch_no);
+    dma_ptr->dma_regs.count = 0;
+    dma_ptr->dma_link       = &table->ctrl1;
+    dma_ptr->gcontrol       = DMA_INT_TRIG;
+}
+
+
+
+dmautogo.c/     925425262   0     0     0       857       `
+/****************************************************************************/
+/* dmautogo.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <dma40.h>
+
+void dma_auto_go(int ch_no, long ctrl, void *link_tab)
+{
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND START DMA AUTOINIT            */
+    /*----------------------------------------------------------------------*/
+    DMA_REG *dma_ptr        = DMA_ADDR(ch_no);    /* DMA REGISTER POINTER   */
+    dma_ptr->dma_regs.count = 0;
+    dma_ptr->dma_link       = link_tab;
+    dma_ptr->gcontrol       = ctrl;
+}
+
+
+
+dmavars.c/      925425264   0     0     0       425       `
+/****************************************************************************/
+/* dmavars.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+
+AUTOINIT     auto_tab[6];           /* GLOBAL MEMORY FOR AUTOINIT TABLE     */
+
+
+
+elapse.c/       925425264   0     0     0       851       `
+/****************************************************************************/
+/* elapse.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+
+float elapse()
+{
+    float                         x;
+    /*----------------------------------------------------------------------*/
+    /*  RETURN THE COUNTER VALUE IN SECOND                                  */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_BASE;          /* TIMER 0 REGISTER POINTER  */
+    x  = (float)time_count*4294967296.0;
+    x += (float)tim_ptr->counter;
+    return (x/TIMER_CLOCK);
+}
+
+
+
+in_msg.c/       925425264   0     0     0       1402      `
+/****************************************************************************/
+/* in_msg.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <compt40.h>
+
+size_t in_msg(int ch_no, void *message, int step)
+{
+    long    *msg   = (long *)message;
+    int      i, j, message_size;
+
+    /*----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER                              */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* COMM PORT POINTER*/
+
+    /*----------------------------------------------------------------------*/
+    /*  READ IN THE LENGTH AND THE MESSAGE DATA                             */
+    /*----------------------------------------------------------------------*/
+    if (cp_ptr->gcontrol_bit.in_level == 0)
+       return 0;
+
+    message_size = cp_ptr->in_port;
+    if (step == 1)
+       for (i = 0; i < message_size; i++) *msg++ = cp_ptr->in_port;
+    else {
+       j = 0;
+       for (i = 0; i < message_size; i++) {
+            msg[j] = cp_ptr->in_port;
+            j += step;
+       }
+    }
+    return(message_size);
+}
+
+
+in_msg16.c/     925425264   0     0     0       1178      `
+/****************************************************************************/
+/* in_msg16.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include  <compt40.h>
+
+size_t in_msg16(int ch_no, void *message)
+{
+    int      in_size, output_size;
+
+    /*--------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER                            */
+    /*--------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /*COM PORT POINTER*/
+
+    /*--------------------------------------------------------------------*/
+    /*  READ IN THE LENGTH AND THE MESSAGE DATA                           */
+    /*--------------------------------------------------------------------*/
+    if (cp_ptr->gcontrol_bit.in_level == 0)
+      return 0;
+
+    in_size     = cp_ptr->in_port;
+    output_size = unpack_halfword(&cp_ptr->in_port, message, in_size);
+    return(output_size);
+}
+
+
+
+
+
+in_msg8.c/      925425264   0     0     0       1192      `
+/****************************************************************************/
+/* in_msg8.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include  <compt40.h>
+
+size_t in_msg8(int ch_no, void *message)
+{
+    int      in_size, output_size;
+
+    /*-----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER                               */
+    /*-----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* INPUT COMPORT PTR */
+
+    /*-----------------------------------------------------------------------*/
+    /*  READ IN THE LENGTH AND THE MESSAGE DATA                              */
+    /*-----------------------------------------------------------------------*/
+    if (cp_ptr->gcontrol_bit.in_level == 0)
+      return 0;
+
+    in_size     = cp_ptr->in_port;
+    output_size = unpack_byte(&cp_ptr->in_port, message, in_size);
+    return(output_size);
+}
+
+
+
+
+in_word.c/      925425264   0     0     0       754       `
+/****************************************************************************/
+/* in_word.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <compt40.h>
+
+long in_word( int ch_no)
+{
+    /*----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER AND SEND OUT DATA            */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER    */
+    return (cp_ptr->in_port);
+}
+
+
+
+
+
+int_ivtp.c/     925425266   0     0     0       417       `
+/****************************************************************************/
+/* int_ivtp.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <intpt40.h>
+
+unsigned long       int_vect_buf[44];
+unsigned long       ivtp_buf;
+
+
+
+int_tvtp.c/     925425266   0     0     0       378       `
+/****************************************************************************/
+/* int_tvtp.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <intpt40.h>
+
+unsigned long       tvtp_buf;
+
+
+intvars.c/      925425266   0     0     0       507       `
+/****************************************************************************/
+/* intvars.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <intpt40.h>
+
+asm("          .global __vector");         /* Memory location for default   */
+asm("__vector  .usect  "".vector"",64");   /* interrupt vector              */
+
+
+
+out_msg.c/      925425266   0     0     0       1322      `
+/****************************************************************************/
+/* out_msg.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <compt40.h>
+
+void out_msg(int ch_no, void *message, size_t message_size, int step)
+{
+    long    *msg   = (long *)message;
+    int      i, j;
+
+    /*----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER                              */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no); /* COMM PORT POINTER*/
+
+    /*----------------------------------------------------------------------*/
+    /*  SEND OUT THE LENGTH AND THE MESSAGE DATA                            */
+    /*----------------------------------------------------------------------*/
+    cp_ptr->out_port = message_size;
+    if (step == 1)
+       for ( i =  message_size; i > 0; i--)  cp_ptr->out_port = *msg++;
+    else {
+       j = 0;
+       for (i = 0; i < message_size; i++) {
+            cp_ptr->out_port = msg[j];
+            j += step;
+       }
+    }
+}
+
+
+out_msg8.c/     925425266   0     0     0       1059      `
+/****************************************************************************/
+/* out_msg8.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef    _INLINE
+#include  <compt40.h>
+
+void out_msg8(int ch_no, void *message, size_t message_size)
+{
+    /*----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER                              */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER    */
+
+    /*----------------------------------------------------------------------*/
+    /*  SEND OUT THE LENGTH AND THE MESSAGE DATA                            */
+    /*----------------------------------------------------------------------*/
+    pack_byte(message, &cp_ptr->out_port, message_size);
+}
+
+
+
+
+
+out_word.c/     925425266   0     0     0       776       `
+/****************************************************************************/
+/* out_word.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <compt40.h>
+
+void out_word(long word_value, int ch_no)
+{
+    /*----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER AND SEND OUT DATA            */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);      /* COMM PORT POINTER    */
+    cp_ptr->out_port = word_value;
+}
+
+
+
+
+
+outmsg16.c/     925425266   0     0     0       1064      `
+/****************************************************************************/
+/* outmsg16.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef    _INLINE
+#include  <compt40.h>
+
+void out_msg16(int ch_no, void *message, size_t message_size)
+{
+    /*----------------------------------------------------------------------*/
+    /* SET UP COMM PORT CHANNEL MEMORY POINTER                              */
+    /*----------------------------------------------------------------------*/
+    COMPORT_REG *cp_ptr = COMPORT_ADDR(ch_no);     /* COMM PORT POINTER     */
+
+    /*----------------------------------------------------------------------*/
+    /*  PACKED THE DATA AND SEND OUT THE LENGTH AND THE MESSAGE DATA        */
+    /*----------------------------------------------------------------------*/
+    pack_halfword(message, &cp_ptr->out_port, message_size);
+}
+
+
+
+
+rec_msg.c/      925425268   0     0     0       2737      `
+/****************************************************************************/
+/* rec_msg.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+#include <compt40.h>
+
+void receive_msg(int ch_no, void *message, int step)
+{
+    AUTOINIT *table = &auto_tab[ch_no];       /* DMA AUTOINIT TABLE POINTER */
+
+    /*----------------------------------------------------------------------*/
+    /*  SEND UP DMA POINTER AND COMM PORT LOCATION                          */
+    /*----------------------------------------------------------------------*/
+    DMA_REG  *dma_ptr = DMA_ADDR(ch_no);          /* DMA REGISTER POINTER   */
+    long     *in_fifo = COMPORT_IN_ADDR(ch_no);   /* INPUT FIFO LOCATION    */
+
+    /*----------------------------------------------------------------------*/
+    /*  WAIT FOR DMA TO BE FREE FOR RECEIVING THE MESSAGE                   */
+    /*----------------------------------------------------------------------*/
+    while (chk_dma(ch_no));
+
+    /*----------------------------------------------------------------------*/
+    /*  SEND UP DMA INTERRUPT ENABLE (DIE) REGISTER                         */
+    /*----------------------------------------------------------------------*/
+    dma_sync_set(ch_no, 1, 0);
+
+    /*----------------------------------------------------------------------*/
+    /*  SET UP DMA AUTOINITIALIZATION FUNCTIONS                             */
+    /*----------------------------------------------------------------------*/
+    table->ctrl1              = RECEIVE_LENGTH;
+    table->dma_mesg1.src      = in_fifo;
+    table->dma_mesg1.src_idx  = 0;
+    table->dma_mesg1.count    = 1;
+    table->dma_mesg1.dst      = &table->dma_mesg2.count;
+    table->dma_mesg1.dst_idx  = 1;
+    table->link1              = &table->ctrl2;
+
+    table->ctrl2              = RECEIVE_DATA;
+    table->dma_mesg2.src      = in_fifo;
+    table->dma_mesg2.src_idx  = 0;
+    /* Count is loaded by previous autoinit record! */
+    table->dma_mesg2.dst      = message;
+    table->dma_mesg2.dst_idx  = step;
+
+    /*----------------------------------------------------------------------*/
+    /*  SEND UP DMA TO RECEIVE THE MESSAGE LENGTH AND DATA                  */
+    /*----------------------------------------------------------------------*/
+    DMA_RESET(ch_no);
+    dma_ptr->dma_regs.count = 0;               /* Force DMA to do Autoinit. */
+    dma_ptr->dma_link       = &table->ctrl1;   /* Address of start of entry */
+    dma_ptr->gcontrol       = RECEIVE_LENGTH;
+}
+
+
+
+send_msg.c/     925425268   0     0     0       2693      `
+/****************************************************************************/
+/* send_msg.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <dma40.h>
+#include <compt40.h>
+
+void send_msg(int ch_no, void *message, size_t message_size, int step)
+{
+    AUTOINIT *table = &auto_tab[ch_no];       /* DMA AUTOINIT TABLE POINTER */
+
+    /*----------------------------------------------------------------------*/
+    /*  SET UP DMA POINTER AND COMM PORT LOCATION                           */
+    /*----------------------------------------------------------------------*/
+    DMA_REG  *dma_ptr  = DMA_ADDR(ch_no);           /* DMA REGISTER POINTER */
+    long     *out_fifo = COMPORT_OUT_ADDR(ch_no);   /* INPUT FIFO LOCATION  */
+
+    /*----------------------------------------------------------------------*/
+    /*  WAIT FOR DMA TO BE FREE FOR RECEIVING THE MESSAGE                   */
+    /*----------------------------------------------------------------------*/
+    while (chk_dma(ch_no));
+
+    /*----------------------------------------------------------------------*/
+    /*  SET UP DMA INTERRUPT ENABLE (DIE) REGISTER                          */
+    /*----------------------------------------------------------------------*/
+    dma_sync_set(ch_no, 1, 1);
+
+    /*----------------------------------------------------------------------*/
+    /*  SET UP DMA AUTOINITIALIZATION FUNCTIONS                             */
+    /*----------------------------------------------------------------------*/
+    msg_size[ch_no]           = message_size;
+
+    table->ctrl1              = SEND_LENGTH;
+    table->dma_mesg1.src      = &msg_size[ch_no];
+    table->dma_mesg1.src_idx  = 0;
+    table->dma_mesg1.count    = 1;
+    table->dma_mesg1.dst      = out_fifo;
+    table->dma_mesg1.dst_idx  = 0;
+    table->link1              = &table->ctrl2;
+
+    table->ctrl2              = SEND_DATA;
+    table->dma_mesg2.src      = message;
+    table->dma_mesg2.src_idx  = step;
+    table->dma_mesg2.count    = message_size;
+    table->dma_mesg2.dst      = out_fifo;
+    table->dma_mesg2.dst_idx  = 0;
+
+    /*--------------------------------------------------------------------*/
+    /*  SEND UP DMA TO TRANSMIT THE MESSAGE LENGTH AND DATA               */
+    /*--------------------------------------------------------------------*/
+    DMA_RESET(ch_no);
+    dma_ptr->dma_regs.count = 0;
+    dma_ptr->dma_link       = &table->ctrl1;
+    dma_ptr->gcontrol       = SEND_LENGTH;
+}
+
+
+sleep.c/        925425268   0     0     0       2109      `
+/****************************************************************************/
+/* sleep.c V5.11                                                           */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+/* -6/20/94: changed the IVTP location from 0x02ffe00 to DEFAULT            */
+/****************************************************************************/
+#include  <timer40.h>
+#include  <intpt40.h>
+
+void sleep(float x)
+{
+    TIMER_REG  *tim_ptr = TIMER_ADDR(1);    /* TIMER 1 REGISTER POINTER     */
+    int        i;
+    /*----------------------------------------------------------------------*/
+    /*  SETUP TIMER 0 INTERRUPT FOR WAKEN UP                                */
+    /*----------------------------------------------------------------------*/
+    set_ivtp(DEFAULT);                      /* SET IVTP TO DEFAULT value    */
+    install_int_vector(wakeup,43);          /* SET TINT0 INTERRUPT VECTOR   */
+    set_iie(TIMER1);                        /* ENABLE TINT1 BIT IN IIE      */
+    INT_ENABLE();                           /* ENABLE GIE BIT               */
+
+    /*----------------------------------------------------------------------*/
+    /*  SETUP TIMER 0 FUNCTION AND DELAY THE CPU UNTIL END OF PERIOD        */
+    /*----------------------------------------------------------------------*/
+    i = (int)(TIMER_CLOCK*x) - SLEEP_CALL_DELAY;
+    tim_ptr->period   = (i > 0) ? i : 0;    /* SET DELAY TIME               */
+    tim_ptr->gcontrol = TIM_START;
+    CPU_IDLE();                             /* DELAY CPU OPERATION          */
+
+    /*----------------------------------------------------------------------*/
+    /*  RESET TIMER 0 INTERRUPT FUNCTION SETUP                              */
+    /*----------------------------------------------------------------------*/
+    deinstall_int_vector(43);               /* SET TINT1 INTERRUPT VECTOR   */
+    reset_ivtp();                           /* RESET IVTP TO PREVIOUS VALUE */
+}
+
+
+
+
+t_delay.c/      925425268   0     0     0       2129      `
+/****************************************************************************/
+/* t_delay.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+/* -6/20/94: changed the IVTP location from 0x02ffe00 to DEFAULT            */
+/****************************************************************************/
+#include  <timer40.h>
+#include  <intpt40.h>
+
+void time_delay(unsigned long x)
+{
+    TIMER_REG     *tim_ptr = TIMER_ADDR(1);    /* TIMER 0 REGISTER POINTER  */
+    int            i;
+    /*----------------------------------------------------------------------*/
+    /*  SETUP TIMER 0 INTERRUPT FOR WAKEN UP                                */
+    /*----------------------------------------------------------------------*/
+    set_ivtp(DEFAULT);                      /* SET IVTP TO DEFAULT value    */
+    install_int_vector(wakeup,43);          /* SET TINT0 INTERRUPT VECTOR   */
+    set_iie(TIMER1);                        /* ENABLE TINT0 BIT IN IIE      */
+    INT_ENABLE();                           /* ENABLE GIE BIT               */
+
+    /*----------------------------------------------------------------------*/
+    /*  SETUP TIMER 0 FUNCTION AND DELAY THE CPU UNTIL END OF PERIOD        */
+    /*----------------------------------------------------------------------*/
+    i = x - TIME_CALL_DELAY;
+    if (i < 0) i = 0;
+    tim_ptr->period   = i/2;                /* SET DELAY TIME               */
+    tim_ptr->gcontrol = TIM_START;
+    CPU_IDLE();                             /* DELAY CPU OPERATION          */
+
+    /*----------------------------------------------------------------------*/
+    /*  RESET TIMER 0 INTERRUPT FUNCTION SETUP                              */
+    /*----------------------------------------------------------------------*/
+    deinstall_int_vector(43);               /* SET TINT1 INTERRUPT VECTOR   */
+    reset_ivtp();                           /* RESET IVTP TO PREVIOUS VALUE */
+}
+
+
+
+
+t_read.c/       925425268   0     0     0       753       `
+/****************************************************************************/
+/* t_read.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+
+int time_read(int t)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP TIMER REGISTER POINTER AND RETURN THE COUNTER VALUE          */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);         /* TIMER REGISTER POINTER  */
+    return (tim_ptr->counter);
+}
+
+
+
+
+
+
+
+t_start.c/      925425268   0     0     0       790       `
+/****************************************************************************/
+/* t_start.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+
+void time_start(int t)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP TIMER REGISTER POINTER AND START THE TIMER FUNCTION          */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);         /* TIMER REGISTER POINTER  */
+    tim_ptr->period     = -1;
+    tim_ptr->gcontrol   = TIM_START;
+}
+
+
+
+
+
+t_stop.c/       925425270   0     0     0       783       `
+/****************************************************************************/
+/* t_stop.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+
+int time_stop(int t)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP TIMER REGISTER POINTER AND STOP THE TIMER FUNCTION           */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr        = TIMER_ADDR(t);   /* TIMER REGISTER POINTER */
+    tim_ptr->gcontrol_bit.hld_ = 0;
+    return(tim_ptr->counter);
+}
+
+
+
+
+tim_in.c/       925425270   0     0     0       784       `
+/****************************************************************************/
+/* tim_in.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+
+int in_timer(int t)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP TIMER REGISTER POINTER AND RETURN THE INPUT DATA             */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_ADDR(t);          /* TIMER REGISTER POINTER */
+    tim_ptr->gcontrol   = 0;
+    return(tim_ptr->gcontrol_bit.datin);
+}
+
+
+tim_left.c/     925425270   0     0     0       789       `
+/****************************************************************************/
+/* tim_left.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+
+float time_left()
+{
+    /*----------------------------------------------------------------------*/
+    /*  RETURN (PERIOD - COUNTER) VALUE IN SECOND                           */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_BASE;          /* TIMER 0 REGISTER POINTER  */
+    return ((float)(tim_ptr->period - tim_ptr->counter)/TIMER_CLOCK);
+}
+
+
+
+
+
+
+
+tim_out.c/      925425270   0     0     0       770       `
+/****************************************************************************/
+/* tim_out.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+
+void out_timer(int t, int flag)
+{
+    /*----------------------------------------------------------------------*/
+    /*  SET UP TIMER REGISTER POINTER AND SET THE OUTPUT DATA FLAG          */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr          = TIMER_ADDR(t);      /* TIMER REG POINTER */
+    tim_ptr->gcontrol   = (flag << 2) | 2;
+}
+
+
+
+tim_stop.c/     925425270   0     0     0       1663      `
+/****************************************************************************/
+/* time_stop.c V5.11                                                       */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <timer40.h>
+#include <intpt40.h>
+
+float time_end()
+{
+    float       x;
+    /*----------------------------------------------------------------------*/
+    /*  SET UP TIMER REGISTER POINTER AND STOP THE TIMER FUNCTION           */
+    /*----------------------------------------------------------------------*/
+    TIMER_REG  *tim_ptr = TIMER_BASE;       /* TIMER 0 REGISTER POINTER     */
+    TIMER_HALT(0);
+
+    /*----------------------------------------------------------------------*/
+    /*  RESET THE TIMER 0 INTERRUPT FUNCTION SETUP                          */
+    /*----------------------------------------------------------------------*/
+    INT_DISABLE();                          /* DISABLE GIE BIT              */
+    reset_iie(TIMER0);                      /* DISABLE TINT0 BIT IN IIE     */
+    deinstall_int_vector(02);               /* RESET TINT0 INTERRUPT VECTOR */
+    reset_ivtp();                           /* RESET IVTP TO PREVIOUS VALUE */
+
+    /*----------------------------------------------------------------------*/
+    /*  RETURN THE ELAPSED TIME                                             */
+    /*----------------------------------------------------------------------*/
+    x  = (float)time_count*4294967296.0;
+    x += (float)tim_ptr->counter;
+    return (x/TIMER_CLOCK);
+}
+
+
+
+time_go.c/      925425270   0     0     0       871       `
+/****************************************************************************/
+/* time_go.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#undef   _INLINE
+#include <timer40.h>
+#include <intpt40.h>
+
+void time_go(int ch_no, TIMER_REG *reg)
+{
+    TIMER_REG  *tim_ptr = TIMER_ADDR(ch_no);    /* TIMER REGISTER POINTER   */
+    /*----------------------------------------------------------------------*/
+    /* SETUP DMA CHANNEL REGISTER POINTER AND START DMA FUNCTION            */
+    /*----------------------------------------------------------------------*/
+    tim_ptr->counter  = reg->counter;
+    tim_ptr->period   = reg->period;
+    tim_ptr->gcontrol = reg->gcontrol;
+}
+
+
+
+time_int.c/     925425272   0     0     0       435       `
+/****************************************************************************/
+/* time_int.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <timer40.h>
+unsigned int               time_count;
+
+void c_int45(void)
+{
+    time_count += 1;
+}
+
+
+
+time_run.c/     925425272   0     0     0       1421      `
+/****************************************************************************/
+/* time_run.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <timer40.h>
+#include <intpt40.h>
+
+void time_run()
+{
+    TIMER_REG  *tim_ptr = TIMER_BASE;       /* TIMER 0 REGISTER POINTER     */
+
+    /*----------------------------------------------------------------------*/
+    /*  SET UP TIMER 0 INTERRUPT FOR 64 BIT TIMER COUNTER                   */
+    /*----------------------------------------------------------------------*/
+    time_count = 0;                         /* RESET COUNTER FOR 64BIT COUNT*/
+    set_ivtp(DEFAULT);                      /* SET IVTP TO .vector SECTION  */
+    install_int_vector(c_int45,02);         /* SET TINT0 INTERRUPT VECTOR   */
+    set_iie(TIMER0);                        /* ENABLE TINT0 BIT IN IIE      */
+    INT_ENABLE();                           /* ENABLE GIE BIT               */
+
+    /*----------------------------------------------------------------------*/
+    /*  SET UP TIMER REGISTER POINTER AND START THE TIMER FUNCTION          */
+    /*----------------------------------------------------------------------*/
+    tim_ptr->period   = -1;
+    tim_ptr->gcontrol = TIM_START;
+}
+
+
+
+timer40.c/      925425272   0     0     0       620       `
+/****************************************************************************/
+/* timer40.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+/* -6/20/94: created CLOCK_PER_SEC global variable to replace the define    */
+/*           statement previously defined in timer40.h                      */
+/****************************************************************************/
+#include <intpt40.h>
+
+float CLOCK_PER_SEC = 25000000.0;
+
+val_die.c/      925425272   0     0     0       384       `
+/****************************************************************************/
+/* val_die.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <intpt40.h>
+
+int die_value()
+{
+    GET_DIE();
+}
+
+val_iie.c/      925425272   0     0     0       384       `
+/****************************************************************************/
+/* val_iie.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <intpt40.h>
+
+int iie_value()
+{
+    GET_IIE();
+}
+
+val_iif.c/      925425272   0     0     0       384       `
+/****************************************************************************/
+/* val_iif.c V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <intpt40.h>
+
+int iif_value()
+{
+    GET_IIF();
+}
+
+val_ivtp.c/     925425274   0     0     0       386       `
+/****************************************************************************/
+/* val_ivtp.c V5.11                                                        */
+/* Copyright (c) 1992-1999% Texas Instruments Incorporated                  */
+/****************************************************************************/
+#include <intpt40.h>
+
+int ivtp_value()
+{
+    GET_IVTP();
+}
+
+val_st.c/       925425274   0     0     0       382       `
+/****************************************************************************/
+/* val_st.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <intpt40.h>
+
+int st_value()
+{
+    GET_ST();
+}
+
+val_tvtp.c/     925425274   0     0     0       386       `
+/****************************************************************************/
+/* val_tvtp.c V5.11                                                        */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <intpt40.h>
+
+int tvtp_value()
+{
+    GET_TVTP();
+}
+
+wakeup.c/       925425274   0     0     0       497       `
+/****************************************************************************/
+/* wakeup.c V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated                   */
+/****************************************************************************/
+#include <timer40.h>
+#include <intpt40.h>
+
+void wakeup(void)
+{
+    TIMER_HALT(1);                         /* STOP TIMER 1 FUNCITON        */
+    reset_iie(TIMER1);
+}
+
+
+

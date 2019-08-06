@@ -1,0 +1,2841 @@
+!<arch>
+acos.asm/       925425290   0     0     0       7639      `
+	.length  85
+	.width   132
+*************************************************************************
+* ACOS V5.11# - Arcosine of x
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double acos(double x);
+*
+*    Outputs:        Returns arcosine of x
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR2,R0,R1,R2,R3,R4,IR1,DP,SP                   *
+*									*
+*    Other calls:    _sqrt, DIV_F30, DIV_F40				*
+*									*
+*  Y = abs(x)								*
+*									*
+*  if Y > 0.5, g = (1 - Y) / 2, Y = - 2 * sqrt(g), i = 1		*
+*									*
+*  if Y < 0.5, g = Y * Y, i = 0 					*
+*									*
+*  R = g * (p2 * g + p1) / ((g + q1) * g + q0)				*
+*									*
+*  result = Y + Y * R							*
+*									*
+*  if x < 0, result = ai - result + ai					*
+*									*
+*  if x > 0, result = bi + result + bi					*
+*************************************************************************
+
+        .globl  _errno
+        .def _acos
+	.ref _sqrt
+    .if .tms320C40
+	 .ref DIV_F40
+    .else
+	 .ref DIV_F30
+    .endif
+
+EDOM	.set	1
+	.text
+;
+; ====================== Stack    Parameter passsing ======================
+;
+   .if .REGPARM == 0
+;
+; Get arguement, and save necesary registers
+;
+_acos:  POP     AR2                   ;return address -> AR2
+	POPF	R2		      ;x -> R2
+        .if .BIGMODEL
+	LDP	ACOS_ADR	      ;save data page
+        .endif
+	PUSH	R4		      ;save integer value in R4
+	LDI	@ACOS_ADR,AR0	      ;load data address in AR0
+	PUSHF	R2		      ;save x
+;
+; Determine which branch in the algorithm to take
+;
+	ABSF	R2,R4		      ;Y = absolute value of x
+	CMPF	0.5,R4		      ;compare x to 0.5
+	BN	ACOSB1		      ;if x < 0.5, branch to ACOSB1
+        CMPF    1.0,R4                ;check for boundary conditions
+        BGTD    EPI0_1                ;If |x|>= 1, error! Meanwhile process next three instructions
+        LDI     1,IR1                 ;save 1 in IR1
+	SUBF	R4,*AR0,R4	      ;Y -= 1
+	MPYF	0.5,R4		      ;g = Y / 2
+	PUSH	AR0		      ;save data address
+	PUSHF	R4		      ;save g
+	PUSHF	R4		      ;save g for use by sqrt
+	CALL	_sqrt		      ;sqrt(g) -> R0
+	SUBI    1,SP                  ;restore stack pointer
+	LDF	R0,R4		      ;R0 -> R4
+	BD	ACOSB2		      ;branch to ACOSB2
+	MPYF	-2.0,R4 	      ;Y = - 2 * g
+	POPF	R3		      ;g -> R3
+	POP	AR0		      ;restore data address
+;
+; Compute result
+;
+ACOSB1: LDI	2,IR1		      ;save 2 in IR1
+	MPYF	R4,R4,R3	      ;g = Y * Y
+ACOSB2: MPYF	*++AR0,R3,R0	      ;-0.504400557 * g -> R0
+	ADDF	*++AR0,R0	      ;R0 + 0.933935835 -> R0
+	MPYF	R3,R0		      ;g * R0 -> R0
+	ADDF	*++AR0,R3,R1	      ;-5.54846723 + g -> R1
+	MPYF	R3,R1		      ;g * R1 -> R1
+	ADDF	*++AR0,R1	      ;R1 + 5.60363004 -> R1
+	PUSH	AR0		      ;SAVE AR0 BEFORE CALLING DIV_F
+				      ;R0 / R1 -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+
+        POP     AR0                   ;RESTORE AR0
+	MPYF	R4,R0		      ;Y * R0 -> R0
+	ADDF	R4,R0		      ;result = R0 + Y
+	NEGF	R0,R1		      ;- result -> R1
+	POPF	R2		      ;x -> R2
+	LDFNN	R1,R0		      ;if x >= 0, result = - result
+;
+; Note: IR1 is used as an offset pointer to either a[i] or b[i], also
+; note that only one add is perform of either 2*a[i] or 2*b[i].
+;
+        LDIN    2,R3                  ;if x < 0, 2 -> R3
+	LDINN	0,R3		      ;if x >= 0, 0 -> R3
+	ADDI	R3,IR1		      ;IR1 + R3 -> IR1
+	BD	AR2		      ;return from routine
+	POP	R4		      ;restore R4
+        ADDF    *++AR0(IR1),R0        ;result += 2*A(IR1) or 2*B(IR1)
+	ADDI	1,SP		      ;restore stack pointer
+;
+; Error service module for invalid arguement
+;
+EPI0_1:
+	SUBI    1,SP
+        POP     R4                    ;restore R4
+        ADDI    1,SP                  ;restore stack pointer
+        .if .BIGMODEL
+        LDP     _errno
+        .endif
+        BD      AR2                   ;return from routine
+        LDI     EDOM,R1
+        STI     R1,@_errno            ;set error flag 1 (domain error)
+        LDF     0.0,R0                ;return 0.0
+;
+; ====================== Register Parameter passsing ======================
+;
+   .else
+;
+; Get arguement, and save necesary registers
+;
+_acos:  POP     AR2                   ;return address -> AR2
+        .if .BIGMODEL
+	LDP	ACOS_ADR	      ;save data page
+        .endif
+	PUSH	R4		      ;save integer value in R4
+	LDI	@ACOS_ADR,AR0	      ;load data address in AR0
+	PUSHF	R2		      ;save x
+;
+; Determine which branch in the algorithm to take
+;
+        ABSF    R2,R2                 ;Y = absolute value of x
+        CMPF    0.5,R2                ;compare x to 0.5
+	BN	ACOSB1		      ;if x < 0.5, branch to ACOSB1
+        CMPF    1.0,R2                ;check for boundary conditions
+        BGTD    EPI0_1                ;If |x|>= 1, error! Meanwhile process next three instructions
+        LDI     1,IR1                 ;save 1 in IR1
+        SUBF    R2,*AR0,R2            ;Y -= 1
+        MPYF    0.5,R2                ;g = Y / 2
+	PUSH	AR0		      ;save data address
+        PUSHF   R2                    ;save g
+	CALL	_sqrt		      ;sqrt(g) -> R0
+	LDF	R0,R4		      ;R0 -> R4
+	BD	ACOSB2		      ;branch to ACOSB2
+	MPYF	-2.0,R4 	      ;Y = - 2 * g
+	POPF	R3		      ;g -> R3
+	POP	AR0		      ;restore data address
+;
+; Compute result
+;
+ACOSB1: LDI	2,IR1		      ;save 2 in IR1
+        LDF     R2,R4
+        MPYF    R4,R4,R3              ;g = Y * Y
+ACOSB2: MPYF	*++AR0,R3,R0	      ;-0.504400557 * g -> R0
+	ADDF	*++AR0,R0	      ;R0 + 0.933935835 -> R0
+	MPYF	R3,R0		      ;g * R0 -> R0
+	ADDF	*++AR0,R3,R1	      ;-5.54846723 + g -> R1
+	MPYF	R3,R1		      ;g * R1 -> R1
+	ADDF	*++AR0,R1	      ;R1 + 5.60363004 -> R1
+	PUSH	AR0		      ;SAVE AR0 BEFORE CALLING DIV_F
+				      ;R0 / R1 -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;RESTORE AR0
+	MPYF	R4,R0		      ;Y * R0 -> R0
+	ADDF	R4,R0		      ;result = R0 + Y
+	NEGF	R0,R1		      ;- result -> R1
+	POPF	R2		      ;x -> R2
+	LDFNN	R1,R0		      ;if x >= 0, result = - result
+;
+; Note: IR1 is used as an offset pointer to either a[i] or b[i], also
+; note that only one add is perform of either 2*a[i] or 2*b[i].
+;
+        LDIN    2,R3                  ;if x < 0, 2 -> R3
+	LDINN	0,R3		      ;if x >= 0, 0 -> R3
+	BD	AR2		      ;return from routine
+	ADDI	R3,IR1		      ;IR1 + R3 -> IR1
+	POP	R4		      ;restore R4
+        ADDF    *++AR0(IR1),R0        ;result += 2*A(IR1) or 2*B(IR1)
+;
+; Error service module for invalid arguement
+;
+EPI0_1:
+        SUBI    1,SP
+        POP     R4                    ;restore R4
+        .if .BIGMODEL
+        LDP     _errno
+        .endif
+        BD      AR2                   ;return from routine
+        LDI     EDOM,R1
+        STI     R1,@_errno            ;set error flag 1 (domain error)
+        LDF     0.0,R0                ;return 0.0
+   .endif
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+ .if .BIGMODEL
+ACOS_ADR:	.word	ACOS
+ .else
+		.bss ACOS_ADR,1
+		.sect ".cinit"
+		.word 1,ACOS_ADR,ACOS
+		.text
+
+ .endif
+ACOS            .float  1.0
+		.float -0.504400557
+		.float	0.933935835
+		.float -0.554846723e+1
+		.float	0.560363004e+1
+                .float  0.0                ; 2*b[1]
+                .float  1.570796371        ; 2*a[1]
+                .float  3.141593274        ; 2*b[2]
+                .float  1.570796371        ; 2*a[2]
+
+	.end
+
+
+asin.asm/       925425290   0     0     0       7001      `
+	.length  85
+	.width   132
+*************************************************************************
+* ASIN  V5.11 - Arcsine
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double asin(double x);
+*
+*    Outputs:        Returns arcsine of x
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR2,R0,R1,R2,R3,R4,IR1,DP,SP                   *
+*    Other calls:    _sqrt, DIV_F30, DIV_F40				*
+*									*
+*  Y = abs(x)								*
+*									*
+*  if Y > 0.5, g = (1 - Y) / 2, Y = - 2 * sqrt(g), i = 1		*
+*									*
+*  if Y < 0.5, g = Y * Y, i = 0 					*
+*									*
+*  R = g * (p2 * g + p1) / ((g + q1) * g + q0)				*
+*									*
+*  result = Y + Y * R							*
+*									*
+*  if x < 0, result = ai + result + ai					*
+*									*
+*  if x > 0, result = -ai - result - ai 				*
+*************************************************************************
+
+        .globl _errno
+	.def _asin
+	.ref _sqrt
+   .if .tms320C40
+	.ref DIV_F40
+   .else
+	.ref DIV_F30
+   .endif
+EDOM    .set    1
+
+	.text
+;
+; ====================== Stack    Parameter passsing ======================
+;
+   .if .REGPARM == 0
+;
+; Initialization: get arguement, setup data page, and save registers
+;
+_asin:	POP	AR2		      ;return address -> AR2
+	POPF	R2		      ;x -> R2
+       .if .BIGMODEL
+	LDP	ASIN_ADR	      ;save data page
+       .endif
+	PUSH	R4		      ;save integer value in R4
+	PUSHF	R2		      ;save x
+	LDI	@ASIN_ADR,AR0	      ;load data address in AR0
+	ABSF	R2,R4		      ;Y = absolute value of x
+;
+; Determine which branch in the algorithm to take
+;
+	CMPF	0.5,R4		      ;compare x to 0.5
+	BN	ASINB1		      ;if x < 0.5, branch to ASINB1
+        CMPF    1.0,R4                ;check for a domain error
+        BGTD    EPI0_1                ;branch to error routine
+	LDI	2,IR1		      ;save 2 in IR1
+	SUBF	R4,*AR0,R4	      ;Y -= 1
+	MPYF	0.5,R4		      ;g = Y / 2
+	PUSH	AR0		      ;save data address
+	PUSHF	R4		      ;save g
+	PUSHF	R4		      ;save g for use by sqrt
+	CALL	_sqrt		      ;sqrt(g) -> R0
+	SUBI    1,SP                  ;restore stack pointer
+	LDF	R0,R4		      ;R0 -> R4
+	BD	ASINB2		      ;branch to ASINB2
+	MPYF	-2.0,R4 	      ;Y = - 2 * g
+	POPF	R3		      ;g -> R3
+	POP	AR0		      ;restore data address
+;
+; Compute result
+;
+ASINB1: LDI	1,IR1		      ;save 1 in IR1
+	MPYF	R4,R4,R3	      ;g = Y * Y
+ASINB2: MPYF	*++AR0,R3,R0	      ;-0.504400557 * g -> R0
+	ADDF	*++AR0,R0	      ;R0 + 0.933935835 -> R0
+	MPYF	R3,R0		      ;g * R0 -> R0
+	ADDF	*++AR0,R3,R1	      ;-5.54846723 + g -> R1
+	MPYF	R3,R1		      ;g * R1 -> R1
+	ADDF	*++AR0,R1	      ;R1 + 5.60363004 -> R1
+	PUSH	AR0		      ;SAVE AR0 BEFORE CALLING DIV_F
+				      ;R0 / R1 -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;RESTORE AR0
+	MPYF	R4,R0		      ;Y * R0 -> R0
+	ADDF	R4,R0		      ;result = R0 + Y
+;
+; Note: IR0 is an offset pointer into the array a[]. Also note that
+; the only one add of twice the constant a[i] is performed.
+;
+        ADDF    *++AR0(IR1),R0        ;result += 2*A(IR1)
+	NEGF	R0,R1		      ;- result -> R1
+	POPF	R2		      ;x -> R2
+	BD	AR2		      ;return from routine
+        LDFN    R1,R0                 ; if x < 0, result = -result
+	POP	R4		      ;restore R4
+	ADDI	1,SP		      ;restore stack pointer
+;
+; Error service module
+;
+EPI0_1:
+	SUBI    1,SP
+        POP     R4                    ;restore R4
+	ADDI    1,SP                  ;restore stack pointer
+        .if  .BIGMODEL
+        LDP     _errno
+        .endif
+        BD      AR2                   ;return from routine
+        LDI     EDOM,R1               ;
+        STI     R1,@_errno            ;set error flag = 1 (domain error)
+        LDF     0.0,R0
+;
+; ====================== Register Parameter passsing ======================
+;
+   .else
+;
+; Initialization: get arguement, setup data page, and save registers
+;
+_asin:	POP	AR2		      ;return address -> AR2
+       .if .BIGMODEL
+	LDP	ASIN_ADR	      ;save data page
+       .endif
+	PUSH	R4		      ;save integer value in R4
+	PUSHF	R2		      ;save x
+	LDI	@ASIN_ADR,AR0	      ;load data address in AR0
+        ABSF    R2,R2                 ;Y = absolute value of x
+;
+; Determine which branch in the algorithm to take
+;
+        CMPF    0.5,R2                ;compare x to 0.5
+	BN	ASINB1		      ;if x < 0.5, branch to ASINB1
+        CMPF    1.0,R2                ;check for a domain error
+        BGTD    EPI0_1                ;branch to error routine
+	LDI	2,IR1		      ;save 2 in IR1
+        SUBF    R2,*AR0,R2            ;Y -= 1
+        MPYF    0.5,R2                ;g = Y / 2
+	PUSH	AR0		      ;save data address
+        PUSHF   R2                    ;save g
+	CALL	_sqrt		      ;sqrt(g) -> R0
+	LDF	R0,R4		      ;R0 -> R4
+	BD	ASINB2		      ;branch to ASINB2
+	MPYF	-2.0,R4 	      ;Y = - 2 * g
+	POPF	R3		      ;g -> R3
+	POP	AR0		      ;restore data address
+;
+; Compute result
+;
+ASINB1: LDI	1,IR1		      ;save 1 in IR1
+        LDF     R2,R4
+        MPYF    R4,R4,R3              ;g = Y * Y
+ASINB2: MPYF	*++AR0,R3,R0	      ;-0.504400557 * g -> R0
+	ADDF	*++AR0,R0	      ;R0 + 0.933935835 -> R0
+	MPYF	R3,R0		      ;g * R0 -> R0
+	ADDF	*++AR0,R3,R1	      ;-5.54846723 + g -> R1
+	MPYF	R3,R1		      ;g * R1 -> R1
+	ADDF	*++AR0,R1	      ;R1 + 5.60363004 -> R1
+	PUSH	AR0		      ;SAVE AR0 BEFORE CALLING DIV_F
+				      ;R0 / R1 -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;RESTORE AR0
+	MPYF	R4,R0		      ;Y * R0 -> R0
+	ADDF	R4,R0		      ;result = R0 + Y
+;
+; Note: IR0 is an offset pointer into the array a[]. Also note that
+; the only one add of twice the constant a[i] is performed.
+;
+        ADDF    *++AR0(IR1),R0        ;result += 2*A(IR1)
+	NEGF	R0,R1		      ;- result -> R1
+	BD	AR2		      ;return from routine
+	POPF	R2		      ;x -> R2
+        LDFN    R1,R0                 ; if x < 0, result = -result
+	POP	R4		      ;restore R4
+;
+; Error service module
+;
+EPI0_1:
+	SUBI    1,SP
+        POP     R4                    ;restore R4
+        .if  .BIGMODEL
+        LDP     _errno
+        .endif
+        BD      AR2                   ;return from routine
+        LDI     EDOM,R1               ;
+        STI     R1,@_errno            ;set error flag = 1 (domain error)
+        LDF     0.0,R0
+   .endif
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+  .if .BIGMODEL
+ASIN_ADR:       .word   ASIN
+ .else
+		.bss ASIN_ADR,1
+		.sect ".cinit"
+		.word 1,ASIN_ADR,ASIN
+		.text
+
+ .endif
+
+ASIN            .float  1.0
+		.float -0.504400557
+		.float	0.933935835
+		.float -0.554846723e+1
+		.float	0.560363004e+1
+		.float	0.0
+                .float  1.570796371
+
+	.end
+
+
+atan.asm/       925425290   0     0     0       7774      `
+        .length  85
+	.width   132
+*************************************************************************
+* ATAN V5.11 - Arctangent
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double atan(double x);
+*
+*    Outputs:        Returns arctangent of x
+*    Status:         Set from result in R0.
+*    Registers used: AR0,R0,R1,R2,R4,IR1,DP,SP                          *
+*    Other calls:    DIV_F30, DIV_F40					*
+*									*
+*  if x > 1, x = 1 / x							*
+*									*
+*  if x > 2 - sqrt(3), x = (x * sqrt(3) - 1) / (sqrt(3) + x)		*
+*									*
+*  g = x * x								*
+*									*
+*  R = g * (p1 * g + p0) / (g + q0)					*
+*									*
+*  result = x + x * R							*
+*************************************************************************
+
+	.def _atan
+   .if .tms320C40
+	.ref DIV_F40
+   .else
+	.ref DIV_F30
+   .endif
+
+	.text
+;
+; ====================== Stack    Parameter passsing ======================
+;
+   .if .REGPARM == 0
+;
+; Initialization: get arguement, set data pointer, and save registers
+;
+_atan:  POP     AR2                   ;return address -> AR2
+	POPF	R1		      ;x -> R1
+	PUSHF	R1		      ;save x
+        .if .BIGMODEL
+	LDP	ATAN_ADR	      ;load data page
+        .endif
+	PUSH	R4		      ;save integer value in R4
+	LDI	@ATAN_ADR,AR0	      ;load data address in AR0
+	ABSF	R1		      ;abs(x)
+	LDI	0,IR1		      ;N = 0
+;
+; Determine which branch in the algorithm to take
+; Compute f depending on the arguement x. Keep in mind that if x>1, that 1/x
+; < 2 - sqrt(3).
+;
+	CMPF	1.0,R1		      ;compare R1 to 1.0
+	BN	ATANB1		      ;if x < 1.0, x = x, N = 0
+	LDF	1.0,R0		      ;load 1.0 in R0
+	ADDI	4,IR1		      ;N = 4
+        PUSH    AR0                   ;save AR0 which is used in DIV_F30
+				      ;x = 1 / x
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;restore AR0
+        LDF     R0,R1                 ;x is in R0 before -> R1
+ATANB1: CMPF	*AR0++,R1	      ;compare x to 2 - sqrt(3)
+	BN	ATANB2		      ;if x < 2 - sqrt(3), branch to ATANB2
+	MPYF	*AR0,R1,R0	      ;x * sqrt(3) -> R0
+	SUBF	1.0,R0		      ;x * sqrt(3) - 1
+	ADDF	*AR0,R1 	      ;x = x + sqrt(3)
+	ADDI	2,IR1		      ;N += 2
+        PUSH    AR0                   ;save AR0 which is used in DIV_F30
+				      ;f = (x * sqrt(3) - 1) / (x + sqrt(3))
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;restore AR0
+	LDF	R0,R1		      ;f -> R1
+;
+; Compute result (R) using f. IR1 is an offset pointer used to choose the
+; correct a[i]
+;
+ATANB2: MPYF	R1,R1,R2	      ;g = f * f
+	MPYF	*++AR0,R2,R0	      ;-0.5090958253e-1 * g -> R0
+	ADDF	*++AR0,R0	      ;-0.4708325141 + R0 -> R0
+	LDF	R1,R4		      ;f -> R1
+	MPYF	R2,R0		      ;g * R0 -> R0
+	ADDF	*++AR0,R2,R1	      ;1.41250074 + g -> R1
+        PUSH    AR0                   ;save AR0 which is used in DIV_F30
+				      ;R = R0 / R1
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;restore AR0
+	MPYF	R4,R0		      ;R *= f
+	ADDF	R4,R0		      ;R += f
+	NEGF	R0,R1		      ;-R -> R1
+	CMPI	2,IR1		      ;compare N to 2
+	LDFP	R1,R0		      ;if N > 2, R = -R
+	ADDI	1,IR1		      ;N += 1
+	POP	R4		      ;restore R4
+	LDF	*++AR0(IR1),R2	      ;initialize exponent field of R2
+	LDI	*+AR0,R2	      ;A(N) -> R2
+	ADDF	R2,R0		      ;R += A(N)
+	NEGF	R0,R1		      ;- R -> R1
+	POPF	R2		      ;x -> R2
+        BD      AR2                   ;return from routine
+	LDFN	R1,R0		      ;if x < 0, R1 -> R0
+	RND	R0		      ;round R0 to preserve signifigance
+	ADDI	1,SP		      ;restore stack pointer
+
+;
+; ====================== Register Parameter passsing ======================
+;
+   .else
+;
+; Initialization: get arguement, set data pointer, and save registers
+;
+_atan:  POP     AR2                   ;return address -> AR2
+        PUSHF   R2                    ;save x
+        LDF     R2,R1                 ;use R1 register because it jives with DIV_F
+        .if .BIGMODEL
+	LDP	ATAN_ADR	      ;load data page
+        .endif
+	PUSH	R4		      ;save integer value in R4
+	LDI	@ATAN_ADR,AR0	      ;load data address in AR0
+        ABSF    R1                    ;abs(x)
+	LDI	0,IR1		      ;N = 0
+;
+; Determine which branch in the algorithm to take
+; Compute f depending on the arguement x. Keep in mind that if x>1, that 1/x
+; < 2 - sqrt(3).
+;
+        CMPF    1.0,R1                ;compare R1 to 1.0
+	BN	ATANB1		      ;if x < 1.0, x = x, N = 0
+	LDF	1.0,R0		      ;load 1.0 in R0
+	ADDI	4,IR1		      ;N = 4
+        PUSH    AR0                   ;save AR0 which is used in DIV_F30
+				      ;x = 1 / x
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;restore AR0
+        LDF     R0,R1                 ;R0 -> R1
+ATANB1: CMPF    *AR0++,R1             ;compare x to 2 - sqrt(3)
+	BN	ATANB2		      ;if x < 2 - sqrt(3), branch to ATANB2
+        MPYF    *AR0,R1,R0            ;x * sqrt(3) -> R0
+	SUBF	1.0,R0		      ;x * sqrt(3) - 1
+        ADDF    *AR0,R1               ;x = x + sqrt(3)
+	ADDI	2,IR1		      ;N += 2
+        PUSH    AR0                   ;save AR0 which is used in DIV_F30
+				      ;f = (x * sqrt(3) - 1) / (x + sqrt(3))
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;restore AR0
+	LDF	R0,R1		      ;f -> R1
+;
+; Compute result (R) using f. IR1 is an offset pointer used to choose the
+; correct a[i]
+;
+ATANB2: MPYF	R1,R1,R2	      ;g = f * f
+	MPYF	*++AR0,R2,R0	      ;-0.5090958253e-1 * g -> R0
+	ADDF	*++AR0,R0	      ;-0.4708325141 + R0 -> R0
+	LDF	R1,R4		      ;f -> R1
+	MPYF	R2,R0		      ;g * R0 -> R0
+	ADDF	*++AR0,R2,R1	      ;1.41250074 + g -> R1
+        PUSH    AR0                   ;save AR0 which is used in DIV_F30
+				      ;R = R0 / R1
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;restore AR0
+	MPYF	R4,R0		      ;R *= f
+	ADDF	R4,R0		      ;R += f
+	NEGF	R0,R1		      ;-R -> R1
+	CMPI	2,IR1		      ;compare N to 2
+	LDFP	R1,R0		      ;if N > 2, R = -R
+	ADDI	1,IR1		      ;N += 1
+	POP	R4		      ;restore R4
+	LDF	*++AR0(IR1),R2	      ;initialize exponent field of R2
+	LDI	*+AR0,R2	      ;A(N) -> R2
+	ADDF	R2,R0		      ;R += A(N)
+	NEGF	R0,R1		      ;- R -> R1
+        BD      AR2                   ;return from routine
+	POPF	R2		      ;x -> R2
+	LDFN	R1,R0		      ;if x < 0, R1 -> R0
+	RND	R0		      ;round R0 to preserve signifigance
+   .endif
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+  .if .BIGMODEL
+ATAN_ADR:       .word   ATAN
+  .else
+		.bss ATAN_ADR,1
+		.sect ".cinit"
+		.word 1,ATAN_ADR,ATAN
+		.text
+  .endif
+
+ATAN            .float  0.267949192431122
+		.float	1.732050807568877
+		.float -0.5090958253e-1
+		.float -0.4708325141
+		.float	0.141250074e+1
+;
+; NOTE: The constants for a[n] are store and retreived a little differently
+; in order to ensure maximum precision. They are stored in two words: the
+; first is the exponent and the second is the mantissa.
+;
+                .float  0.0                  ; a0  = 0.0
+		.int	0
+                .float  0.5                  ; a1  = 0.5235987905
+		.int	101355969
+                .float  1.0                  ; a2  = 1.570796355
+                .int    1225775779
+                .float  1.0                  ; a3  = 1.047197805
+                .int    101355969
+
+	.end
+
+atan2.asm/      925425292   0     0     0       7257      `
+	.length  85
+	.width   132
+*************************************************************************
+* ATAN2 V5.11 - Arctan of y / x
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double atan(double y, double x);
+*
+*    Outputs:        Returns the arctan of y / x
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR2,R0,R1,R2,DP,SP                             *
+*    Other calls:    _atan, DIV_F30, DIV_F40				*
+*									*
+*  if x >= 0, result = atan(y / x)					*
+*									*
+*  if x < 0 & y >= 0, result = pi + atan(y / x) 			*
+*									*
+*  if x < 0 & y < 0,  result = atan(y / x) - pi 			*
+*************************************************************************
+
+        .globl _errno
+	.def _atan2
+	.ref _atan
+   .if .tms320C40
+	.ref DIV_F40
+   .else
+	.ref DIV_F30
+   .endif
+
+EDOM    .set    1
+	.text
+;
+; ====================== Stack    Parameter passsing ======================
+;
+   .if .REGPARM == 0
+;
+; Initialization: get arguements, set up data pointer, and save registers
+;
+_atan2: POP	AR2		      ;return address -> AR2
+	LDF	0.0,R2		      ;clear R2
+	POPF	R0		      ;y -> R0
+	LDFN	-1.0,R2 	      ;sign y -> R2
+	POPF	R1		      ;x -> R1
+;
+; Determine which branch in the algorithm to take
+;
+        BGT     ATAN2B2               ;for x > 0, result = atan(y / x)
+        BZ      EPI0_1                ;for x = 0, process error!
+	PUSHF	R2		      ;save sign y
+				      ;(y / x) -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        PUSH    AR2                   ;save AR2 since it's used by _atan
+	PUSHF	R0		      ;push R0
+;
+; Compute the arctan using other math routine
+;
+	CALL	_atan		      ;atan(y / x) -> R0
+	SUBI    1,SP                  ;restore stack pointer
+        POP     AR2                   ;restore AR2
+	POPF	R2		      ;restore sign y
+        BGE     ATAN2B1               ;if y negative then branch delayed,
+	BD	AR2		      ;return from routine
+        .if .BIGMODEL
+        LDP     ATAN2                 ;for large model set data page
+        .else
+        NOP
+        .endif
+        SUBF   @ATAN2,R0              ;R0 = atan(y / x) - pi
+	ADDI	2,SP		      ;restore stack pointer
+ATAN2B1 BD	AR2		      ;return from routine
+        .if .BIGMODEL
+        LDP     ATAN2                 ;for large model set data page
+        .else
+        NOP
+        .endif
+        ADDF   @ATAN2,R0              ;R0 = atan(y / x) + pi
+	ADDI	2,SP		      ;restore stack pointer
+				      ;y / x -> R0
+       .if .tms320C40
+ATAN2B2  CALL DIV_F40
+       .else
+ATAN2B2  CALL DIV_F30
+       .endif
+        PUSH    AR2                   ;save AR2 since it's used by _atan
+	PUSHF	R0		      ;push R0
+	CALL	_atan		      ;arctan(y / x) -> R0
+	SUBI    1,SP
+        POP     AR2
+	BD	AR2		      ;return from routine
+        NOP
+	NOP
+        ADDI    2,SP                  ;restore stack
+;
+; Error service module for a domain error (x=0)
+;
+EPI0_1:	ADDI    2,SP
+
+	.if .BIGMODEL
+	LDP	ATAN2_ADR 	      ;load data page
+        .endif
+	CMPF	R1,R0		      ;compare y (R0) with 0 (R1)
+	BNED	AR2		      ; if (y != 0)
+	LDI	@ATAN2_ADR,AR1	      ;   load data address in AR0
+	LDFP	*+AR1(1),R0	      ;   if (y > 0) return pi/2
+	LDFN	*+AR1(2),R0	      ;   if (y < 0) return -(pi/2)
+
+        .if .BIGMODEL		      ; if (y == 0)
+        LDP     _errno
+        .endif
+        BD      AR2                   ;   return from routine
+	LDI     EDOM,R1
+        STI     R1,@_errno            ;   set error = 1 (domain error)
+        LDF     0.0,R0                ;   return value of 0.0
+
+; ====================== Register Parameter passsing ======================
+;
+   .else
+;
+; Initialization: get arguements, set up data pointer, and save registers
+;
+_atan2: POP	AR2		      ;return address -> AR2
+        PUSH    R4                    ;save R4
+        LDF     0.0,R4                ;clear R2
+        LDF     R2,R0                 ;y -> R0
+        LDFN    -1.0,R4               ;sign y -> R4
+        LDF     R4,R2                 ;sign y -> R2
+        POP     R4                    ;restore R4
+        LDF     R3,R1                 ;x -> R1
+;
+; Determine which branch in the algorithm to take
+;
+        BGT     ATAN2B2               ;for x > 0, result = atan(y / x)
+        BZ      EPI0_1                ;for x = 0, process error!
+        PUSHF   R2                    ;save sign y
+				      ;(y / x) -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        LDF     R0,R2                 ;put arguement into input register
+;
+; Compute the arctan using other math routine
+;
+        PUSH    AR2                   ;save AR2 since it's used by _atan
+	CALL	_atan		      ;atan(y / x) -> R0
+        POP     AR2
+	POPF	R2		      ;restore sign y
+        BGE     ATAN2B1               ;if y negative then branch delayed,
+	BD	AR2		      ;return from routine
+        .if .BIGMODEL
+        LDP     ATAN2                 ;for large model set data page
+        .else
+        NOP
+        .endif
+        SUBF   @ATAN2,R0              ;R0 = atan(y / x) - pi
+        NOP
+ATAN2B1 BD	AR2		      ;return from routine
+        .if .BIGMODEL
+        LDP     ATAN2                 ;for large model set data page
+        .else
+        NOP
+        .endif
+        ADDF   @ATAN2,R0              ;R0 = atan(y / x) + pi
+        NOP
+				      ;y / x -> R0
+       .if .tms320C40
+ATAN2B2  CALL DIV_F40
+       .else
+ATAN2B2  CALL DIV_F30
+       .endif
+        LDF     R0,R2                 ;load arguement into input register
+        PUSH    AR2
+	CALL	_atan		      ;arctan(y / x) -> R0
+        POP     AR2
+        B       AR2                   ;return from routine
+;
+; Error service module for a domain error (x=0)
+;
+EPI0_1:
+	 .if .BIGMODEL
+	LDP	ATAN2_ADR 	      ;load data page
+        .endif
+	CMPF	R1,R0		      ;compare y (R0) with 0 (R1)
+	BNED	AR2		      ; if (y != 0)
+	LDI	@ATAN2_ADR,AR1	      ;   load data address in AR0
+	LDFP	*+AR1(1),R0	      ;   if (y > 0) return pi/2
+	LDFN	*+AR1(2),R0	      ;   if (y < 0) return -(pi/2)
+
+        .if .BIGMODEL		      ; if (y == 0)
+        LDP     _errno
+        .endif
+        BD      AR2                   ;   return from routine
+	LDI     EDOM,R1
+        STI     R1,@_errno            ;   set error = 1 (domain error)
+        LDF     0.0,R0                ;   return value of 0.0
+
+   .endif
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+ .if .BIGMODEL
+ATAN2_ADR:	.word ATAN2
+ATAN2           .float  3.14159265359             ; pi
+		.float  1.57079632679489661923    ; pi / 2
+		.float  -1.57079632679489661923   ; -(pi / 2)
+ .else
+		.bss ATAN2_ADR,1
+		.sect ".cinit"
+		.word 1,ATAN2_ADR,ATAN2
+
+                .bss ATAN2,3
+                .sect ".cinit"
+                .word 3,ATAN2
+                .float  3.14159265359             ; pi
+		.float  1.57079632679489661923    ; pi / 2
+		.float  -1.57079632679489661923   ; -(pi / 2)
+ .endif
+	.end
+
+
+ceil.asm/       925425292   0     0     0       1201      `
+	.length  85
+	.width   132
+*************************************************************************
+* CEIL V5.11 - The smallest integral value not less than x
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double ceil(double x);
+*
+*    Outputs:        Returns the smallest integral not less than x
+*    Status:         Set from result in R0.
+*    Registers used: R0-R2,AR1
+*    Other calls:    None                                               *
+*									*
+*  if x is not an integer, x += 1					*
+*									*
+*  result = int(x)							*
+*************************************************************************
+
+	.def _ceil
+
+	.text
+_ceil:	POP	AR1		      ;return address -> AR1
+        .if .REGPARM == 0
+	LDI     SP,AR0                ;set up frame pointer
+        LDF     *-AR0(0),R2           ;x -> R2
+        .endif
+	FIX	R2,R0		      ;integer x -> R0
+	FLOAT	R0		      ;integer x
+	BD	AR1		      ;return from routine
+	SUBF	R0,R2,R1	      ;x - integer x -> R1
+	LDFNZ	1.0,R1		      ;if x is not an integer, 1 -> R1
+	ADDF	R1,R0		      ;ceil(x) = R1 + R0
+
+	.end
+
+
+cos.asm/        925425292   0     0     0       3589      `
+	.length  85
+	.width   132
+*************************************************************************
+* COS V5.11 - Cosine of x
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double cos(double x);
+*
+*    Outputs:        Returns cosine of x
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR1,AR2,R0,R1,R2,R3,DP,SP                      *
+*    Other calls:    None                                               *
+*									*
+*  N = int(x / PI) - 0.5						*
+*									*
+*  f = x - N * PI							*
+*									*
+*  g = f * f								*
+*									*
+*  R = ((((r4 * g + r3) * g + r2) * g + r1) * g)			*
+*									*
+*  result = f + f * R							*
+*									*
+*  if x < 0, result = - result						*
+*									*
+*  if N is even, result = - result					*
+*									*
+*  For x < -2 ^ 31 or x > 2 ^ 31, cos will return an incorrect answer	*
+*************************************************************************
+
+	.def _cos
+	.text
+;
+; Initialization: get arguement, setup data pointers, and save registers
+;
+_cos:	POP	AR2		      ;return address -> AR2
+        .if .REGPARM == 0
+	LDI     SP,AR0                ;setup frame pointer
+        LDF     *-AR0(0),R2           ;x -> R2
+        .endif
+        .if .BIGMODEL
+	LDP	COS_ADR 	      ;save data page
+        .endif
+        ABSF    R2                    ;Y = absolute value of x
+        LDI     @COS_ADR,AR0
+;
+; Compute the result
+;
+        ADDF    *AR0++,R2,R1          ;Y += Pi / 2
+        MPYF    *AR0++,R1             ;Y / PI -> R1
+        FIX     R1,R0                 ;N = integer R1
+        FLOAT   R0                    ;XN = float N
+        SUBF    R0,R1                 ;R1 - XN -> R1
+	CMPF	0.5,R1		      ;compare R1 to 0.5
+	LDFNN	1.0,R1		      ;if R1 >= 0.5, 1 -> R1
+	LDFN	0.0,R1		      ;if R1 < 0.5, 0 -> R1
+        ADDF    R0,R1                 ;R2 + R1 to round R2
+        FIX     R1,R0                 ;XN = integer R1
+        TSTB    1,R0                  ;logical AND XN and 1
+	LDINZ	-1,AR1		      ;if XN is odd, - 1 -> R3
+	LDIZ	1,AR1		      ;if XN is even, 1 -> R3
+	SUBF	0.5,R1		      ;sign *= R3
+        MPYF    *AR0++,R1,R3          ;3.140625 * XN -> R3
+        SUBF    R3,R2                 ;Y - R3 -> R3
+        MPYF    *AR0++,R1,R3          ;9.67653589796e-4 * XN -> R2
+        SUBF    R3,R2,R0              ;f = Y - XN * PI
+	MPYF	R0,R0,R3	      ;g = f * f
+        MPYF    *AR0++,R3,R2          ;0.2601903036e-5 * g -> R2
+        ADDF    *AR0++,R2             ;-0.1980741872e-3 + R2 -> R2
+	MPYF	R3,R2		      ;R2 * g -> R2
+        ADDF    *AR0++,R2             ;0.8333025739e-2 + R2 -> R2
+	MPYF	R3,R2		      ;R2 * g -> R2
+        ADDF    *AR0++,R2             ;-0.1666665668 + R2 -> R2
+	MPYF	R3,R2		      ;g * R2 -> R2
+	MPYF	R0,R2		      ;f * R2 -> R2
+	BD	AR2		      ;return from routine
+	ADDF	R0,R2		      ;result = f + R2
+	FLOAT	AR1,R1		      ;sign -> R1
+	MPYF	R2,R1,R0	      ;result *= sign
+
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+  .if .BIGMODEL
+COS_ADR:        .word   COS
+  .else
+		.bss COS_ADR,1
+		.sect ".cinit"
+		.word 1,COS_ADR,COS
+		.text
+
+  .endif
+
+COS             .float  1.570796326794896
+		.float	0.318309886183790
+		.float	3.140625
+		.float	9.67653589793e-4
+		.float	0.2601903036e-5
+		.float -0.1980741872e-3
+		.float	0.8333025139e-2
+		.float -0.1666665668
+
+	.end
+
+
+cosh.asm/       925425292   0     0     0       7656      `
+	.length  85
+	.width   132
+*************************************************************************
+* COSH V5.11 - Hyperbolic cosine
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double cosh(double x);
+*
+*    Outputs:        Returns the hyperbolic cosine
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR2,R0-R4                                      *
+*    Other calls:    _ldexp, DIV_F,_fabs                                *
+*  Uses Cody and Waite algorithm for exp described in chapter 6.        *
+*									*
+*  result = (exp(x) + 1 / exp(x)) / 2                                   *
+*************************************************************************
+
+	.def _cosh
+	.ref _ldexp
+   .if .tms320C40
+	.ref DIV_F40
+   .else
+	.ref DIV_F30
+   .endif
+        .globl _errno
+
+ERANGE  .set    2
+	.text
+;
+; ====================== Stack    Parameter passsing ======================
+;
+   .if .REGPARM == 0
+;
+; Initialization: get arguement, setup data pointers, and save registers
+;
+_cosh:  POP     AR2                   ;return address -> AR2
+        POPF    R0                    ;x -> R0
+	PUSH	R4
+        ABSF    R0                    ;x = |x|
+        .if .BIGMODEL
+        LDP     COSH_ADR
+        .endif
+        LDI     @COSH_ADR,AR0         ;load data address in AR0
+        CMPF    *+AR0(6),R0           ;if x > MAXH then error
+        BGTD    EPI0_1
+;
+; Compute the exp(g)
+;
+        MPYF    *AR0++,R0,R1          ;INVLOGe2*x -> y
+        ADDF    5.0e-1,R1             ; y + 0.5 -> y
+        FIX     R1,R1                 ;
+        FLOAT   R1,R4                 ; int(y) = n = R4
+        MPYF    *AR0++,R4,R1          ;C3*n -> R1
+        SUBF    R1,R0,R3              ;(x-C3*n) -> R3
+        MPYF    *AR0++,R4,R2          ;(C4*n) -> R2
+        SUBF    R2,R3,R3              ;(x-C3*n) - (C4*n) = g -> R3
+        MPYF    R3,R3,R1              ;g*g = z -> R4
+        MPYF    *AR0++,R1,R2          ;p1*z -> R2
+        ADDF    *AR0++,R2             ;p1*z + p0 -> R2
+        MPYF    R2,R3,R0              ;(p1*z  + p0)*g = p -> R0
+        MPYF    *AR0++,R1,R3          ;q1*z -> R3
+        ADDF    0.50,R3               ;q1*z + q0 = q -> R3
+        SUBF    R0,R3,R1              ;(q-p) -> R1
+				      ;R0/R1 = p/(q-p) -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        ADDF    0.5,R0                ;0.5 + p/(q-p) = r -> R0
+        FIX     R4,R4                 ;cast n as int
+        PUSH    R4                    ;exponent
+        PUSHF   R0                    ;x
+;
+; Compute final result
+;
+        CALL    _ldexp                ;exp(x) = exp(g) * 2 ^ n
+	SUBI    2,SP		      ;restore stack pointer
+        PUSHF   R0                    ;save exp(x)
+        LDF     R0,R1                 ;setup the division of 1.0
+        LDF     1.0,R0                ;by exp(x)
+				      ;exp(-x)*2 = 1 / (exp(x)/2)
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        MPYF    0.25,R0               ;exp(-x)*2/4
+        POPF    R1                    ;load exp(x)/2 into R1
+        BD      AR2                   ;return from routine
+        ADDF    R1,R0,R0              ;cosh(x) = exp(x)/2 + exp(-x)*2/4
+        POP     R4                    ;restore R4
+        ADDI    1,SP                  ;restore stack pointer
+;
+; Error service module
+;
+EPI0_1:
+        .if .BIGMODEL
+        LDP     _errno
+        .endif
+        LDI     ERANGE,R1             ;set error flag = 2 => range error
+        STI     R1,@_errno            ;store error flag
+        BD      AR2                   ;return from routine
+        LDF     *+AR0(6),R0           ;load return value into R0
+        POP     R4                    ;restore R4
+        ADDI    1,SP                  ;restore stack pointer
+;
+; ====================== Register Parameter passsing ======================
+;
+   .else
+;
+; Initialization: get arguement, setup data pointers, and save registers
+;
+_cosh:  POP     AR2                   ;return address -> AR2
+	PUSH	R4
+        ABSF    R2                    ;x = |x|
+        .if .BIGMODEL
+        LDP     COSH_ADR
+        .endif
+        LDI     @COSH_ADR,AR0         ;load data address in AR0
+        CMPF    *+AR0(6),R2           ;if x > MAXH then error
+        BGTD    EPI0_1
+;
+; Compute the exp(g)
+;
+        MPYF    *AR0++,R2,R1          ;INVLOGe2*x -> y
+        ADDF    5.0e-1,R1             ; y + 0.5 -> y
+        FIX     R1,R1                 ;
+        FLOAT   R1,R4                 ; int(y) = n = R4
+        MPYF    *AR0++,R4,R1          ;C3*n -> R1
+        SUBF    R1,R2,R3              ;(x-C3*n) -> R3
+        MPYF    *AR0++,R4,R2          ;(C4*n) -> R2
+        SUBF    R2,R3,R3              ;(x-C3*n) - (C4*n) = g -> R3
+        MPYF    R3,R3,R1              ;g*g = z -> R4
+        MPYF    *AR0++,R1,R2          ;p1*z -> R2
+        ADDF    *AR0++,R2             ;p1*z + p0 -> R2
+        MPYF    R2,R3,R0              ;(p1*z  + p0)*g = p -> R0
+        MPYF    *AR0++,R1,R3          ;q1*z -> R3
+        ADDF    0.50,R3               ;q1*z + q0 = q -> R3
+        SUBF    R0,R3,R1              ;(q-p) -> R1
+				      ;R0/R1 = p/(q-p) -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        ADDF    0.5,R0                ;0.5 + p/(q-p) = r -> R0
+        LDF     R0,R2                ;0.5 + p/(q-p) = r -> R2
+        FIX     R4,R4                 ;cast n as int
+        PUSH    AR2
+        LDI     R4,AR2                ;exponent
+;
+; Compute final result
+;
+        CALL    _ldexp                ;exp(x) = exp(g) * 2 ^ n
+        POP     AR2
+        PUSHF   R0                    ;save exp(x)
+        LDF     R0,R1                 ;setup the division of 1.0
+        LDF     1.0,R0                ;by exp(x)
+				      ;exp(-x)*2 = 1 / (exp(x)/2)
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        MPYF    0.25,R0               ;exp(-x)*2/4
+        BD      AR2                   ;return from routine
+        POPF    R1                    ;load exp(x)/2 into R1
+        ADDF    R1,R0,R0              ;cosh(x) = exp(x)/2 + exp(-x)*2/4
+        POP     R4                    ;restore R4
+;
+; Error service module
+;
+EPI0_1:
+        .if .BIGMODEL
+        LDP     _errno
+        .endif
+        LDI     ERANGE,R1             ;set error flag = 2 => range error
+        BD      AR2                   ;return from routine
+        STI     R1,@_errno            ;store error flag
+        LDF     *+AR0(6),R0           ;load return value into R0
+        POP     R4                    ;restore R4
+   .endif
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+  .if .BIGMODEL
+COSH_ADR:       .word   COSH
+  .else
+		.bss COSH_ADR,1
+		.sect ".cinit"
+		.word 1, COSH_ADR,COSH
+		.text
+  .endif
+
+COSH            .float  1.4426950408889634074            ; INVLOGe2
+                .float  0.693359375                      ; C3
+                .float  -2.121944400546905e-4            ; C4
+                .float  4.1602886268e-3                  ; p1
+                .float  2.499999995e-1                   ; p0
+                .float  4.9987178778e-2                  ; q1
+                .float  89.41598624                      ; MAXH
+                .float  3.4028235e+38                    ; HUGH_VAL
+	.end
+
+exp.asm/        925425294   0     0     0       4380      `
+	.length  85
+	.width   132
+*************************************************************************
+* EXP V5.11 - Exponential
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double exp(double x);
+*
+*    Outputs:        Returns the exponential of x
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR2,R0,R1,R2,R3,R4,R6,DP,SP,IR0                *
+*    Other calls:    DIV_F30                                            *
+*									*
+*  N = int(x / ln(2))							*
+*									*
+*  g = x - N * ln(2)							*
+*									*
+*  z = g * g								*
+*									*
+*  R = 0.5 + g * (p1 * z + p0) / (q1 * z + 0.5) 			*
+*									*
+*  result = R * 2 ^ N							*
+*************************************************************************
+
+        .globl _errno
+        .def _exp
+   .if .tms320C40
+	.ref DIV_F40
+   .else
+	.ref DIV_F30
+   .endif
+
+ERANGE  .set    2
+	.text
+;
+; Initialization: get arguements, setup data pointers, and save registers
+;
+_exp:
+        .if .REGPARM == 0
+	LDI     SP,AR0      ;setup stack pointer
+        LDF     *-AR0(1),R1           ;x -> R1
+        .else
+        LDF     R2,R1                 ;x -> R1
+        .endif
+        .if .BIGMODEL
+	LDP	EXP_ADR 	      ;load data page
+        .endif
+	LDI	@EXP_ADR,AR0	      ;load data address in AR0
+	PUSH	R4		      ;save integer value in R4
+        PUSHF   R6                    ;save float value of R6
+        CMPF    *+AR0(6),R1           ;if x >= MAXX
+        BGED    EPI0_1                ;check for range error
+;
+; Compute R
+;
+	LDF	*AR0++,R4	      ;1 / ln(2) -> R4
+        MPYF    R1,R4                 ;x / ln(2) -> R4
+        ADDF    0.5,R4                ;round before truncating
+
+        FIX     R4,R6                 ;integer part of R4 -> R6
+        FLOAT   R6,R4                 ;make R4 into a floating point number
+	LDF	*AR0++,R2	      ;0.693359375 -> R2
+	MPYF	R4,R2		      ;R4 * R2 -> R2
+	LDF	*AR0++,R3	      ;-2.1219444005469 -> R3
+	MPYF	R4,R3		      ;R4 * R3 -> R3
+	SUBF	R2,R1		      ;R1 - R2 -> R1
+	SUBF	R3,R1		      ;g = x - (int)x * ln(2)
+	MPYF	R1,R1,R2	      ;z = g * g
+	LDF	*AR0++,R0	      ;0.41602886568e-2 -> R0
+	MPYF	R2,R0		      ;z * R0 -> R0
+	ADDF	*AR0++,R0	      ;P = 0.2499999995 + R0
+	MPYF	R1,R0		      ;g * P -> R0
+	LDF	*AR0++,R1	      ;0.49987178778e-1 -> R1
+	MPYF	R2,R1		      ;z * R1 -> R1
+	ADDF	0.5,R1		      ;Q = 0.5 + R1
+	SUBF	R0,R1		      ;Q - g * P -> R1
+				      ;g * P / ( Q - g * P) -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+	ADDF	0.5,R0		      ;R = 0.5 + R0
+        ADDI    1,R6                  ;(int)x + 1 -> R6
+        PUSHF   R0                    ;convert R0 from floating -
+        POP     R1                    ;point to integer format to extract -
+        ASH     -24,R1                ;exponent: store in R1
+        ADDI    R6,R1                 ;Add n + exponent of x
+        ASH     24,R1                 ;restore the exponent to integer field -
+        PUSH    R1                    ;convert back to floating point #
+        POPF    R1                    ;store into R1
+        LDE     R1,R0                 ;Load exponent of R1 into result
+        POPF    R6                    ;restore R6
+	POP	R4		      ;restore R4
+        RETS
+;
+; Error service module
+;
+EPI0_1:
+        .if .BIGMODEL
+        LDP     _errno
+        .endif
+        LDF     *+AR0(6),R0	      ;return HUGE_VAL
+        POPF    R6                    ;restore R6
+        POP     R4                    ;restore R4
+        LDI     ERANGE,R1
+        STI     R1,@_errno            ;set error flag = 2(range error)
+        RETS
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+  .if .BIGMODEL
+EXP_ADR:       .word   EXP
+  .else
+		.bss EXP_ADR,1
+		.sect ".cinit"
+		.word 1,EXP_ADR,EXP
+		.text
+  .endif
+
+EXP             .float  1.44269504088896
+		.float	0.693359375
+		.float -2.1219444005469e-4
+		.float	0.41602886268e-2
+		.float	0.249999995
+		.float	0.49987178778e-1
+                .float 88.72283906                     ; MAXX
+                .float 3.4028235e+38                   ; HUGE_VAL
+
+	.end
+
+fabs.asm/       925425294   0     0     0       1296      `
+	.length  85
+	.width   132
+*************************************************************************
+* FABS V5.11 - Absolute function
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double abs(double x);
+*
+*    Outputs:        Returns absolute value of a floating-point arguement
+*    Status:         Set from result in R0.
+*    Registers used: Registers used: AR1,R0,R1,SP                                         *
+*    Other calls:    None                                               *
+*									*
+*  result = abs(x)							*
+*************************************************************************
+
+	.def _fabs
+
+	.text
+;
+; ====================== Stack    Parameter passsing ======================
+;
+   .if .REGPARM == 0
+_fabs:	POP	AR1		      ;save frame pointer
+	BD	AR1		      ;return from routine
+	POPF	R1		      ;x -> R1
+	ABSF	R1,R0		      ;abs(x)
+	ADDI	1,SP		      ;restore stack pointer
+
+;
+; ====================== Register Parameter passsing ======================
+;
+   .else
+_fabs:	POP	AR1		      ;save frame pointer
+	BD	AR1		      ;return from routine
+        NOP
+        NOP
+        ABSF    R2,R0                 ;abs(x)
+   .endif
+	.end
+
+floor.asm/      925425294   0     0     0       1040      `
+	.length  85
+	.width   132
+*************************************************************************
+* FLOOR V5.11 - Largest integral value not greater than x
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double floor(double x);
+*
+*    Outputs:        Returns the largest integral value less or equal
+*                    to x.
+*    Status:         Set from result in R0.
+*    Registers used: AR1,R0,R1,SP
+*    Other calls:    None                                               *
+*									*
+*  result = int(x)							*
+*************************************************************************
+
+	.def _floor
+
+	.text
+_floor: POP	AR1		      ;return address -> AR1
+        .if .REGPARM == 0
+	LDI     SP,AR0
+        LDF     *-AR0(0),R2
+        .endif
+	BD	AR1		      ;return from routine
+        NOP
+        FIX     R2                    ;integer R2
+        FLOAT   R2,R0                 ;integer R2
+
+	.end
+
+fmod.asm/       925425294   0     0     0       5260      `
+	.length		78
+	.width		132
+****************************************************************
+* FMOD V5.11 - Floating-point remainder of ratio
+* Copyright (c) 1994-1999 Texas Instruments Incorporated
+****************************************************************
+*	Syntax:		double fmod(double x, double y);
+*
+*	Outputs:	Returns the floating-point remainder of x/y.
+*	Status:		Set from result in R0.
+*	Registers Used:	R0, R1, R2, R3, R10(C40), AR0, AR2
+****************************************************************
+	.global _fmod
+	.if	.tms320C30
+		.ref INV_F30
+		.ref MOD_I30
+	.else
+		.ref INV_F40
+		.ref MOD_I40
+	.endif
+****************************************************************
+*  FMOD - Floating point modulo
+*
+*  Algorithm:
+*
+*  Cycles(c30/c40): Stack - 84/57; Register - 
+****************************************************************
+
+********** Stack Parameter Passing **********
+	.if	.REGPARM == 0
+_fmod:	LDI	SP,AR0
+	POP	AR2		;return address -> AR2
+	LDF	*-AR0(1), R2	;x -> R2
+	ABSF	R2,R1		;ABS(x)
+	LDF	*-AR0(2), R3	;y -> R3
+	ABSF	R3,R0		;ABS(y)
+	CMPF	R0,R1		;if ABS(x) == ABS(y)
+	BZ	L3		;goto L3
+				;check if y is very small
+	SUBRF	R1,R0		;ABS(x) - ABS(y) -> R0
+	CMPF	R0,R1		;if (ABS(x)-ABS(y) == ABS(x))
+	BZ	L3		;goto L3
+
+	ABSF	R3,R0		;ABS(y)
+
+;if x and y are both integers,  return x % y.
+;if ((float)(int)ABS(x) == ABS(x) && (float)(int)ABS(y) == ABS(y)))
+;Note I'm making use of the ABS(x) here to avoid the usual (int)x
+;conversion code generated by the compiler to work around the
+;fact that FIX rounds towards -infinity while ANSI says truncate.
+	PUSH	R4		;save R4
+	PUSH	R5		;save R5
+	FIX	R1,R4		;(int)ABS(x) -> R4
+	FLOAT	R4,R4		;(float)(int)ABS(x) -> R4
+	CMPF	R4,R1		;if (float)(int)ABS(x) != ABS(x)
+	BNZ	L4		;goto L4
+
+	FIX	R0,R5		;(int)ABS(y) -> R5
+	FLOAT	R5,R5		;(float)(int)ABS(y) -> R5
+	CMPF	R5,R0		;if (float)(int)ABS(y) != ABS(y)
+	BNZ	L4		;goto L4
+
+ 	FIX	R4,R0		;set up x,y for call to MOD_I30
+	FIX	R5,R1
+	.if	.tms320C30
+	CALL	MOD_I30		;do integer mod
+	.else
+	CALL	MOD_I40
+	.endif	
+	BD	AR2		;delayed branch to return
+	POP	R5		;restore R5
+	POP	R4		;restore R4
+	FLOAT	R0		;convert result to float
+				;branch occurs
+L4:
+	POP	R5		;restore R5
+	POP	R4		;restore R4
+
+; otherwise do the deed.
+	LDF	R3,R0		;place y in R0
+	.if	.tms320C30
+		CALL	INV_F30
+		RND     R0
+	.else
+		CALL	INV_F40
+	.endif
+	MPYF	R2,R0		;x*1/y -> R0
+
+;
+; Convert to int, then back to float to get integer part.
+;
+	LDF	R0,R1		;(x/y) -> R1
+	FIX	R1,R0		;(int)(x/y) -> R0
+	BVD	L1		;branch on overflow
+	FLOAT	R0		;(float)(x/y)
+; 
+; If (x/y) is a negative non-integer, add 1 to integer part.
+;
+        BGE     L2
+        CMPF    R1,R0
+        BEQ     L2
+        ADDF    1.0,R0
+
+L1:	LDFV	R1,R0		;if (overflow) (x/y) = integer part
+L2:	BD	AR2		;delayed branch to return
+	MPYF	R3,R0		;(int)(x/y)*y
+	SUBRF	R2,R0		;return x-(int)(x/y)*y
+	NOP			;delay slot
+				;branch occurs
+
+L3:	BD	AR2		;delayed branch to return
+	LDF	0.0,R0		;return 0.0F
+	NOP			;delay slot
+	NOP			;delay slot
+				;branch occurs
+
+********** Register Parameter Passing **********
+	.else
+_fmod:				
+	POP	AR2		;return address -> AR2
+	ABSF	R2,R1		;x -> R2, ABS(x) -> R1
+	ABSF	R3,R0		;y -> R3, ABS(y) -> R0
+	CMPF	R0,R1		;if ABS(x) == ABS(y)
+	BZ	L3		;goto L3
+				;check if y is very small
+	SUBRF	R1,R0		;ABS(x) - ABS(y) -> R0
+	CMPF	R0,R1		;if (ABS(x) - ABS(y) == ABS(x))
+	BZ	L3		;goto L3
+
+;if x and y are both integers,  return x % y.
+;if ((float)(int)ABS(x) == ABS(x) && (float)(int)ABS(y) == ABS(y)))
+;Note I'm making use of the ABS(x) here to avoid the usual (int)x
+;conversion code generated by the compiler to work around the
+;fact that FIX rounds towards -infinity while ANSI says truncate.
+	PUSH	R4		;save R4
+	PUSH	R5		;save R5
+	FIX	R1,R4		;(int)ABS(x) -> R4
+	FLOAT	R4,R4		;(float)(int)ABS(x) -> R4
+	CMPF	R4,R1		;if (float)(int)ABS(x) != ABS(x)
+	BNZ	L4		;goto L4
+
+	FIX	R0,R5		;(int)ABS(y) -> R5
+	FLOAT	R5,R5		;(float)(int)ABS(y) -> R5
+	CMPF	R5,R0		;if (float)(int)ABS(y) != ABS(y)
+	BNZ	L4		;goto L4
+
+ 	FIX	R4,R0		;set up x,y for call to MOD_I30
+	FIX	R5,R1
+	.if	.tms320C30
+	CALL	MOD_I30		;do integer mod
+	.else
+	CALL	MOD_I40
+	.endif	
+	BD	AR2		;delayed branch to return
+	POP	R5		;restore R5
+	POP	R4		;restore R4
+	FLOAT	R0		;convert result to float
+				;branch occurs
+L4:
+	POP	R5		;restore R5
+	POP	R4		;restore R4
+
+	LDF	R3,R0		;place y in R0
+	.if	.tms320C30
+		CALL	INV_F30
+		RND     R0
+	.else
+		CALL	INV_F40
+	.endif
+	MPYF	R2,R0		;x*1/y -> R0
+
+;
+; Convert to int, then back to float to get integer part.
+;
+	LDF	R0,R1		;(x/y) -> R1
+	FIX	R1,R0		;(int)(x/y) -> R0
+	BVD	L1		;branch on overflow
+	FLOAT	R0		;(float)(x/y)
+; 
+; If (x/y) is a negative non-integer, add 1 to integer part.
+;
+        BGE     L2
+        CMPF    R1,R0
+        BEQ     L2
+        ADDF    1.0,R0
+
+L1:	LDFV	R1,R0		;if (overflow) (x/y) = integer part
+L2:	BD	AR2		;delayed branch to return
+	MPYF	R3,R0		;(int)(x/y)*y
+	SUBRF	R2,R0		;return x-(int)(x/y)*y
+	NOP                     ;delay slot
+				;branch occurs
+
+L3:	BD	AR2		;delayed branch to return
+	LDF	0.0,R0		;return 0.0F
+	NOP			;delay slot
+	NOP			;delay slot
+				;branch occurs
+	.endif
+	.end
+log.asm/        925425294   0     0     0       4869      `
+	.length  85
+	.width   132
+*************************************************************************
+* LOG V5.11 - Natural log
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double log(double x);
+*
+*    Outputs:        Returns the natural log
+*    Status:         Set from result in R0.
+*    Registers used: Registers used: AR0,AR2,R0,R1,R2,R3,DP,SP                        *
+*    Other calls:    DIV_F30                                            *
+*									*
+*  N = exponent x							*
+*									*
+*  f = mantissa x, 0.5 <= f < 1 					*
+*									*
+*  if f < sqrt(0.5), znum = f - 0.5, zden = znum * 0.5 + 0.5		*
+*									*
+*  if f > sqrt(0.5), znum = f - 1, zden = f * 0.5 + 0.5 		*
+*									*
+*  z = znum / zden							*
+*									*
+*  w = z * z								*
+*									*
+*  R = w * a0 / (w + b0)						*
+*									*
+*  result = R + N * ln(2)						*
+*************************************************************************
+
+        .globl _errno
+	.def _log
+
+   .if .tms320C40
+	.ref DIV_F40
+   .else
+	.ref DIV_F30
+   .endif
+
+EDOM    .set    1
+ERANGE  .set    2
+	.text
+_log:
+        .if .REGPARM == 0
+	LDI     SP,AR0
+        LDF     *-AR0(1),R2           ;x -> R2
+        .endif
+        BLED    EPI0_1                ;Error! if x <= 0
+        .if .BIGMODEL
+	LDP	LOG_ADR 	      ;load data page
+        .endif
+	LDI	@LOG_ADR,AR0	      ;load data address in AR0
+        PUSHF   R2                    ;save x
+;
+; Extract the mantissa of x = f
+;
+        LDF     1.0,R3                ;1 -> R3
+        LDI     R2,R3                 ;mantissa x -> R3
+        POP     AR2                   ;x -> AR2
+        ASH     -24,AR2               ;exponent x -> AR2
+        ADDI    1,AR2                 ;exponent x += 1
+        LDF     0.5,R2                ;0.5 -> R2
+        MPYF    R2,R3                 ;f = mantissa x * 0.5
+        CMPF    *AR0++,R3             ;compare mantissa x to sqrt(0.5)
+	BLT	LOGB1		      ;if x < sqrt(0.5), branch to LOGB1
+
+        SUBF    R2,R3,R0              ;f - 0.5 -> R0
+	BD	LOGB2		      ;branch to LOGB2
+        SUBF    R2,R0                 ;znum = R0 - 0.5
+        MPYF    R2,R3,R1              ;znum / 2 -> R1
+        ADDF    R2,R1                 ;zden = R1 + 0.5
+LOGB1:  SUBF    R2,R3,R0              ;znum = f - 0.5
+        MPYF    R2,R0,R1              ;znum * 0.5 -> R1
+        ADDF    R2,R1                 ;zden = R1 + 0.5
+        SUBI    1,AR2                 ;exponent x -= 1
+LOGB2:  PUSH    AR0                   ;SAVE AR0 BEFORE CALLING DIV_F30
+				      ;z = znum / zden
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;RESTORE AR0
+	PUSHF	R0		      ;save z
+	MPYF	R0,R0,R1	      ;w = z * z
+;
+; Compute R = w*a0 / (w + b0)
+;
+        MPYF3   *AR0++,R1,R0          ;A = -0.552707855 * R0
+        ADDF    *AR0++,R1             ;B = w + -6.632718214
+        PUSH    AR0                   ;SAVE AR0 BEFORE CALLING DIV_F30
+				      ;A / B -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;RESTORE AR0
+	POPF	R1		      ;z -> R0
+	MPYF	R1,R0		      ;z * R0 -> R0
+	ADDF	R1,R0		      ;ln(mantissa x) = z + R0
+        FLOAT   AR2,R2                ;exponent x -> R2
+        MPYF    *AR0++,R2,R1          ;R2 * -2.121944005 -> R1
+	ADDF	R1,R0		      ;R0 + R1 -> R0
+        MPYF    *AR0++,R2,R1          ;R2 * 0.693359375 -> R1
+	ADDF	R1,R0		      ;ln(x) = ln(mant x) + exp x * ln(2)
+        RETS                          ;return from routine
+;
+; Error service module
+;
+EPI0_1:
+        .if .BIGMODEL
+        LDP   _errno
+        .endif
+        LDI   EDOM,R1                 ;set error flag = 1 for domain error
+        LDF   0.0,R0
+        CMPF  0.0,R2                  ;if R2 is 0.0 then
+        BNE   DOMAIN                  ;   domain error
+        LDF   *+AR0(6),R0             ;
+        LDI   ERANGE,R1               ;   return HUGH_VAL and set flag = 2
+DOMAIN: STI   R1,@_errno              ;store error flag
+        NOP
+	SUBI  1,SP                    ;restore stack pointer
+        RETS                          ;return from routine
+
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+  .if .BIGMODEL
+LOG_ADR:        .word  LOG
+ .else
+		.bss LOG_ADR,1
+		.sect ".cinit"
+		.word 1,LOG_ADR,LOG
+		.text
+ .endif
+
+LOG             .float  0.7071067811865475244
+		.float -0.5527074855
+		.float -6.632718214
+		.float -2.1219444005e-4
+		.float	0.693359375
+		.float	0.4342944925
+                .float  3.4028235e+38                ; HUGH_VAL
+
+	.end
+
+
+log10.asm/      925425296   0     0     0       2349      `
+	.length  85
+	.width   132
+*************************************************************************
+* LOG10 V5.11 - Log base 10
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double Log10(double x);
+*
+*    Outputs:        Returns
+*    Status:         Set from result in R0.
+*    Registers used: AR2,R0,DP,SP                                       *
+*    Other calls:    _log                                               *
+*									*
+*  result = log10(e) * log(x)						*
+*************************************************************************
+*									*
+
+        .globl _errno
+	.def _log10
+        .ref _log
+
+EDOM    .set    1
+ERANGE  .set    2
+	.text
+;
+; ====================== Stack    Parameter passsing ======================
+;
+   .if .REGPARM == 0
+_log10: POP	AR2		      ;return address -> AR2
+	POPF	R0		      ;x -> R0
+	PUSH	AR2		      ;save return address
+	PUSHF	R0		      ;save x
+	CALL	_log		      ;ln(x)
+	SUBI    1,SP		      ;restore the stack pointer
+	POP	AR2		      ;return address -> AR2
+	BD	AR2		      ;return from routine
+        .if .BIGMODEL
+        LDP     LOG_E                 ;load data page for log
+        .else
+        NOP
+        .endif
+        MPYF  @LOG_E,R0               ;log10(x) = ln(x) * log10(e)
+	ADDI	1,SP		      ;restore the stack pointer
+
+;
+; ====================== Register Parameter passsing ======================
+;
+   .else
+_log10:
+	CALL	_log		      ;ln(x)
+	POP	AR2		      ;return address -> AR2
+	BD	AR2		      ;return from routine
+        .if .BIGMODEL
+        LDP     LOG_E                 ;load data page for log
+        .else
+        NOP
+        .endif
+        MPYF  @LOG_E,R0               ;log10(x) = ln(x) * log10(e)
+        NOP
+   .endif
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+  .if .BIGMODEL
+LOG_EADR:       .word   LOG_E
+LOG_E           .float  0.4342944925
+  .else
+		.bss LOG_EADR,1
+		.sect ".cinit"
+		.word 1, LOG_EADR, LOG_E
+
+                .bss LOG_E,1
+                .sect ".cinit"
+                .word 1,LOG_E
+                .float  0.4342944925
+ .endif
+         .text
+
+	.end
+
+
+pow.asm/        925425296   0     0     0       8407      `
+	.length  85
+	.width   132
+*************************************************************************
+* POW V5.11 - The value of x raised to the yth power is computed.
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double pow(double x, double y);
+*
+*    Outputs:        Returns  x**y
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR1,AR2,R0,R1,R2,R3,R4,DP,SP                   *
+*    Other calls:    DIV_F30                                            *
+*									*
+*  z = mantissa x							*
+*									*
+*  log2(z) = c1 * z ^ 9 + c2 * z ^ 7 + c3 * z ^ 5 + c4 * z ^ 3 + c5 * z *
+*									*
+*  log2(x) = exponent x + log2(z)					*
+*									*
+*  a = y * log2(x)							*
+*									*
+*  b = mantissa a							*
+*									*
+*  2 ^ b =  (((((d1 * b + d2) * b + d3) * b + d4) * b + d5) * b + d6)	*
+*									*
+*  result = 2 ^ exponent a * 2 ^ b					*
+*									*
+*	  = 2 ^ (y * log2(x))						*
+*=======================================================================*
+*************************************************************************
+
+        .globl _errno
+	.def _pow
+   .if .tms320C40
+	.ref DIV_F40
+   .else
+	.ref DIV_F30
+   .endif
+
+EDOM    .set    1
+ERANGE  .set    2
+	.text
+
+;
+; Initialization: get arguements, set up data page, and save registers
+;
+_pow:	POP	AR2		      ;return address -> AR2
+        .if .REGPARM == 0
+	LDI     SP,AR0
+        LDF     *-AR0(0),R2           ;x -> R2
+        LDF     *-AR0(1),R3           ;y -> R3
+        .endif
+        BPD     CONT                  ;if y < 0 check for special case
+        NOP
+        NOP
+;
+; Check for special cases that will give an error or cases that the
+; result is known before actually performing any calculations (ie
+; (x = anything, y = 0; answer always 1.0).
+;
+        CMPF    0.0,R2                ;Special case ; x=0,y<0
+        BZD     ERROR1                ;
+CONT:
+        .if .BIGMODEL
+	LDP	POW_ADR 	      ;save data page
+        .endif
+	LDI	@POW_ADR,AR0	      ;load data address in AR0
+	PUSH	R4		      ;save integer value in R4
+	LDF	1.0,R4		      ;sign = 1.0
+	CMPF	0.0,R3		      ;compare y to 0
+        BZD     DONE                  ;if y = 0, branch to DONE
+        LDF     1.0,R0                ;answer always 1.0
+        NOP
+	CMPF	1.0,R3		      ;compare y to 1
+        BZD     DONE                  ;if y = 1, branch to DONE
+        LDF     R2,R0                 ;answer always x
+        NOP
+	CMPF	0.0,R2		      ;compare x to 0
+        BZD     DONE                  ;if x = 0, branch to DONE
+        LDF     0.0,R0                ;answer always 0.0
+        NOP
+        CMPF    0.0,R2
+        BPD     POWB1                 ;for x > 0, branch to POWB1
+	FIX	R3,R1		      ;integer part of y -> R1
+	FLOAT	R1,R0		      ;z = integer part of y
+	PUSHF	R3		      ;save y
+	ABSF	R2		      ;for x < 0, negate x
+	CMPF	R0,R3		      ;compare y to z
+        BNZD    ERROR2                ;if y != z, branch to ERROR
+	TSTB	1,R1		      ;logical AND R1 and 1
+	LDFNZ	-1.0,R4 	      ;if R1 is even, sign = - 1.0
+;
+; Compute the log2(x)
+;
+POWB1:	LDF	1.0,R3		      ;initialize R3
+	LDI	R2,R3		      ;x -> R3, floating R3 = mantissa x
+	PUSHF	R2		      ;save x
+	SUBF	*AR0,R3,R0	      ;x - 1 -> R0
+	ADDF	*AR0++,R3,R1	      ;x + 1 -> R1
+        PUSH    AR0                   ;SAVE AR0 BEFORE CALLING DIV_F30
+				      ;(x - 1) / (x + 1) -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        POP     AR0                   ;RESTORE AR0
+	MPYF	R0,R0,R1	      ;R0 * R0 -> R1
+	MPYF	*AR0++,R1,R2	      ;0.3805560368 * R1 -> R2
+	ADDF	*AR0++,R2	      ;0.4079863206 + R2 -> R2
+	MPYF	R1,R2		      ;R1 * R2 -> R2
+	ADDF	*AR0++,R2	      ;0.5771871581 + R2 -> R2
+	MPYF	R1,R2		      ;R1 * R2 -> R2
+	ADDF	*AR0++,R2	      ;0.9617959069 + R2 -> R2
+	MPYF	R1,R2		      ;R1 * R2 -> R2
+	ADDF	*AR0++,R2	      ;2.885390082 + R2 -> R2
+	MPYF	R0,R2		      ;log2(mantissa x) = x * R2
+	POP	AR1		      ;load 2 ^ exponent x
+	ASH	-24,AR1 	      ;exponent x -> AR1
+	FLOAT	AR1,R1		      ;exponent x -> R1
+	ADDF	R1,R2		      ;log2(x) = R1 + R2
+	POPF	R3		      ;load y
+	MPYF	R3,R2		      ;x = y * log2(x)
+;
+; Compute 2 ^ b
+;
+	FIX	R2,AR1		      ;integer x -> AR1
+	FLOAT	AR1,R0		      ;integer x -> R0
+	SUBF	R0,R2		      ;x - integer x -> R2
+	MPYF	*AR0++,R2,R1	      ;0.2082045327e-3 * R2 -> R1
+	ADDF	*AR0++,R1	      ;0.1266912225e-2 + R1 -> R1
+	MPYF	R2,R1		      ;R2 * R1 -> R1
+	ADDF	*AR0++,R1	      ;0.9656843287e-2 * R1 -> R1
+	MPYF	R2,R1		      ;R2 * R1 -> R1
+	ADDF	*AR0++,R1	      ;0.5549288453e-1 * R1 -> R1
+	MPYF	R2,R1		      ;R2 * R1 -> R1
+	ADDF	*AR0++,R1	      ;0.2402279975 + R1 -> R1
+	MPYF	R2,R1		      ;R2 * R1 -> R1
+	ADDF	*AR0++,R1	      ;0.6931471019 + R1 -> R1
+	MPYF	R2,R1		      ;R2 * R1 -> R1
+	ADDF	1.0,R1		      ;2 ^ fraction of x = R1 + 1
+        FIX     R1,R3                 ;
+        ASH     -24,R3                ;Check for range error
+        ADDI    AR1,R3
+        CMPI    127,R3                ;Check for overflow
+        BGT     EPI0_0                ;
+        CMPI    -127,R3               ;Check for underflow
+        BLTD    EPI0_1
+	LSH	24,AR1		      ;2 ^ integer x -> AR1
+	PUSH	AR1		      ;save AR1
+	POPF	R2		      ;load 2 ^ integer x
+        BD      AR2                   ;return from routine
+	MPYF	R2,R1		      ;2 ^ x -> R1
+	MPYF	R4,R1,R0	      ;2 ^ (y * log2(x)) = sign * R1
+	POP	R4		      ;restore R4
+
+DONE:   BD      AR2
+	NOP
+	POP     R4
+	NOP
+;
+; Error service modules: 4 possible errors; 2 domain errors and 2 range errors
+;
+ERROR1:                        ;Domain error: x=0 and y<0
+        .if .BIGMODEL
+        LDP     _errno                ;load the correct data page
+        .endif
+        POP     R4                    ;restore R4
+        BD      AR2                   ;return from the routine
+        LDF     0.0,R0                ;return 0.0 as the result
+        LDI     EDOM,R1               ;store 1 in error flag => domain error
+        STI     R1,@_errno            ;store error flag
+ERROR2:                        ;Domain error: x is negitive and y is not an
+                               ;integral part
+        .if .BIGMODEL
+        LDP     _errno                ;load the correct data page
+        .endif
+	SUBI    1,SP		      ;restore stack pointer
+        LDF     0.0,R0                ;return 0.0 as the result
+        POP     R4                    ;restore R4
+        BD      AR2                   ;return from routine
+        LDI     EDOM,R1               ;store 1 in error flag => domain error
+        STI     R1,@_errno            ;store error flag
+                               ;Range error: overflow
+EPI0_0:
+        .if .BIGMODEL
+        LDP     _errno                ;load the correct data page
+        .endif
+        LDF     *AR0,R0               ;return HUGH_VAL
+        MPYF    R4,R0                 ;put the correct sign of the value
+        BD      AR2                   ;return from routine
+	POP	R4		      ;restore R4
+        LDI     ERANGE,R1             ;store 2 in error flag => range error
+        STI     R1,@_errno            ;store error flag
+                               ;Range error: underflow
+EPI0_1:
+        .if .BIGMODEL
+        LDP     _errno                ;load the correct data page
+        .endif
+        LDF     0.0,R0                ;Range error: underflow
+        BD      AR2                   ;return from routine
+	POP	R4		      ;restore R4
+        LDI     ERANGE,R1             ;store 2 in error flag => range error
+        STI     R1,@_errno            ;store error flag
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+ .if .BIGMODEL
+POW_ADR:        .word   POW
+ .else
+		.bss POW_ADR,1
+		.sect ".cinit"
+		.word 1, POW_ADR, POW
+		.text
+
+ .endif
+POW             .float  1.0
+		.float	0.3805560368
+		.float	0.4079863206
+		.float	0.5771871581
+		.float	0.9617959069
+		.float	2.885390082
+		.float	0.2082045327e-3
+		.float	0.1266912225e-2
+		.float	0.9656843287e-2
+		.float	0.5549288453e-1
+		.float	0.2402279975
+		.float	0.6931471019
+                .float  3.4028235e+38                ; HUGH_VAL
+	.end
+
+
+sin.asm/        925425296   0     0     0       3384      `
+	.length  85
+	.width   132
+*************************************************************************
+* SIN V5.11 - Sine function
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double sin(double x);
+*
+*    Outputs:        Returns trignometric sine of x
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR1,AR2,R0,R1,R2,R3,DP,SP                      *
+*    Other calls:    None                                               *
+*									*
+*  N = int(x / PI)							*
+*									*
+*  f = x - N * PI							*
+*									*
+*  g = f * f								*
+*									*
+*  R = ((((r4 * g + r3) * g + r2) * g + r1) * g)			*
+*									*
+*  result = f + f * R							*
+*									*
+*  if x < 0, result = - result						*
+*									*
+*  if N is even, result = - result					*
+*									*
+*  For x < -2 ^ 31 or x > 2 ^ 31, sin will return an incorrect answer	*
+*									*
+*************************************************************************
+
+	.def _sin
+
+	.text
+;
+; Initialization: get arguement, setup data page, and save registers
+;
+_sin:	POP	AR2		      ;return address -> AR2
+        .if .REGPARM == 0
+	LDI     SP,AR0
+        LDF     *-AR0(0),R0           ;x -> R0
+        .else
+        LDF     R2,R0                 ;x -> R0
+        .endif
+        .if .BIGMODEL
+	LDP	SIN_ADR 	      ;save data page
+        .endif
+	CMPF	0,R0		      ;compare x to 0
+	LDIN	-1,AR1		      ;if x < 0, sign = - 1
+	LDINN	1,AR1		      ;if x >= 0, sign = 1
+	LDI	@SIN_ADR,AR0	      ;load data address in AR0
+	ABSF	R0		      ;Y = absolute value of x
+	MPYF	*AR0++,R0,R1	      ;Y / PI -> R1
+	FIX	R1,R2		      ;N = integer R1
+	FLOAT	R2		      ;XN = float N
+	SUBF	R2,R1		      ;R1 - XN -> R1
+	CMPF	0.5,R1		      ;compare R1 to 0.5
+	LDFNN	1.0,R1		      ;if R1 >= 0.5, 1 -> R1
+	LDFN	0.0,R1		      ;if R1 < 0.5, 0 -> R1
+	ADDF	R2,R1		      ;R2 + R1 to round R2
+	FIX	R1,R2		      ;XN = integer R1
+	TSTB	1,R2		      ;logical AND XN and 1
+	LDINZ	-1,R3		      ;if XN is odd, - 1 -> R3
+	LDIZ	1,R3		      ;if XN is even, 1 -> R3
+	MPYI	R3,AR1		      ;sign *= R3
+	MPYF	*AR0++,R1,R3	      ;3.140625 * XN -> R3
+	SUBF	R3,R0		      ;Y - R3 -> R3
+	MPYF	*AR0++,R1,R2	      ;9.67653589796e-4 * XN -> R2
+	SUBF	R2,R0		      ;f = Y - XN * PI
+	MPYF	R0,R0,R3	      ;g = f * f
+	MPYF	*AR0++,R3,R2	      ;0.2601903036e-5 * g -> R2
+	ADDF	*AR0++,R2	      ;-0.1980741872e-3 + R2 -> R2
+	MPYF	R3,R2		      ;R2 * g -> R2
+	ADDF	*AR0++,R2	      ;0.8333025739e-2 + R2 -> R2
+	MPYF	R3,R2		      ;R2 * g -> R2
+	ADDF	*AR0++,R2	      ;-0.1666665668 + R2 -> R2
+	MPYF	R3,R2		      ;g * R2 -> R2
+	MPYF	R0,R2		      ;f * R2 -> R2
+	BD	AR2		      ;return from routine
+	ADDF	R0,R2		      ;result = f + R2
+	FLOAT	AR1,R1		      ;sign -> R1
+	MPYF	R2,R1,R0	      ;result *= sign
+
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+ .if .BIGMODEL
+SIN_ADR:        .word   SIN
+ .else
+		.bss SIN_ADR,1
+		.sect ".cinit"
+		.word 1, SIN_ADR, SIN
+		.text
+ .endif
+
+SIN             .float  0.318309886183790
+		.float	3.140625
+		.float	9.67653589793e-4
+		.float	0.2601903036e-5
+		.float -0.1980741872e-3
+		.float	0.8333025139e-2
+		.float -0.1666665668
+
+	.end
+
+sinh.asm/       925425296   0     0     0       12245     `
+	.length  85
+	.width   132
+*************************************************************************
+* SINH V5.11 - Hyperbolic sine
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double sinh(double x);
+*
+*    Outputs:        Returns hyberbolic sine of x
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR2,R0-R5
+*									*
+*  Uses Cody and Waite algorithm for exp from Ch. 6 and sinh from Ch. 12*
+*  if x < 0 , result = - result                                         *
+*  if abs(x) <= 1, R = polynomial expansion: result = x + x^3 * R       *
+*  if abs(x) > 1,  result = (exp(x) - 1/exp(x))/2                       *
+*************************************************************************
+
+        .def _sinh
+	.ref _ldexp
+   .if .tms320C40
+	.ref DIV_F40
+   .else
+	.ref DIV_F30
+   .endif
+        .globl _errno
+
+ERANGE  .set    2
+	.text
+;
+; ====================== Stack    Parameter passsing ======================
+;
+   .if .REGPARM == 0
+_sinh:  POP     AR2                   ;return address -> AR2
+        POPF    R0                    ;x -> R0
+        BGTD    POS                   ;determine sign of x
+        PUSH    R4                    ;save R4 as an integer
+        PUSH    R5                    ;save R5 as a integer
+        LDF     1.0,R5                ;store positive sign for now
+        LDF     -1.0,R5               ;sign is negitive
+        MPYF    R5,R0                 ;sinh(-x) = sinh(x)
+POS:
+        .if .BIGMODEL
+        LDP     SINH_ADR              ;for large model set data page
+        .endif
+        LDI     @SINH_ADR,AR0         ;load data address in AR0
+;
+; Special considerations are given for arguements such that |x|<1,
+; in which a polynomial expansion is used as suggested by Cody and Waite.
+;
+        CMPF    1.0,R0                ;check to see if |x| < 1
+        BLE     POLY                  ;use special consideration
+        CMPF    *+AR0(8),R0           ;if x > MAXH then error
+        BGTD    EPI0_1                ;branch to error service module
+;
+; Here we use the normal reduction of arguement method
+;
+        MPYF    *AR0++,R0,R1          ;INVLOGe2*x -> y
+        ADDF    5.0e-1,R1             ; y + 0.5 -> y
+        FIX     R1,R1                 ;
+        FLOAT   R1,R4                 ; int(y) = n = R4
+        MPYF    *AR0++,R4,R1          ;C3*n -> R1
+        SUBF    R1,R0,R3              ;(x-C3*n) -> R3
+        MPYF    *AR0++,R4,R2          ;(C4*n) -> R2
+        SUBF    R2,R3,R3              ;(x-C3*n) - (C4*n) = g -> R3
+        MPYF    R3,R3,R1              ;g*g = z -> R1
+        MPYF    *AR0++,R1,R2          ;p1*z -> R2
+        ADDF    *AR0++,R2             ;p1*z + p0 -> R2
+        MPYF    R2,R3,R0              ;(p1*z  + p0)*g = p -> R0
+        MPYF    *AR0++,R1,R3          ;q1*z -> R3
+        ADDF    *AR0,R3,R3            ;q1*z + q0 = q -> R3
+        SUBF    R0,R3,R1              ;(q-p) -> R1
+				      ;R0/R1 = p/(q-p) -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        ADDF    0.5,R0                ;0.5 + p/(q-p) = r -> R0
+        FIX     R4,R4                 ;cast n as int
+        PUSH    R4                    ;exponent
+        PUSHF   R0                    ;x
+        CALL    _ldexp                ;exp(x) = exp(g) * 2 ^ n
+	SUBI    2,SP		      ;restore stack pointer
+        PUSHF   R0                    ;save exp(x)
+        LDF     R0,R1                 ;setup the division of 1.0
+        LDF     1.0,R0                ;by exp(x)
+				      ;exp(-x)*2 = 1 / (exp(x)/2)
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        MPYF    0.25,R0               ;exp(-x)*2/4
+        POPF    R1                    ;load exp(x) into R1
+        SUBF    R0,R1,R0              ;sinh(x) = (exp(x)/2 - exp(-x)*2/4) * sign(x)
+        MPYF    R0,R5,R0              ;sihn(-x) = -sinh(x)
+        BD      AR2                   ;return from routine
+        POP     R5                    ;restore r5
+        POP     R4                    ;restore r4
+        ADDI    1,SP                  ;return from routine
+;
+;   Polynomial expansion
+;
+POLY:   MPYF    R0,R0,R1              ;g = x*x -> R1
+        .if .BIGMODEL
+        LDP     POLY_ADR              ;load data page for large model
+        .endif
+        LDI     @POLY_ADR,AR0         ;load data address in AR0
+        MPYF    *AR0++,R1,R2          ;SHP1*g -> R2
+        PUSHF   R0                    ;save x
+        ADDF    *AR0++,R2,R2          ;SHP1*g + SHP0 = p -> R2
+        MPYF    R0,R1,R4              ;x*g -> R4
+        ADDF    *AR0++,R1,R3          ;g + SHQ0 = q -> R3
+        LDF     R2,R0                 ;setup the division of q
+        LDF     R3,R1                 ;by q
+				      ; p/q
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        MPYF    R0,R4                 ;x*g*(p/q) -> R4
+        POPF    R0                    ;restore x
+        ADDF    R4,R0                 ;compute x+x*g*(p/q)
+        MPYF    R5,R0                 ;sinh(-x) = - sinh(x)
+        BD      AR2                   ;return from routine
+        POP     R5                    ;restore r5
+        POP     R4                    ;restore r4
+        ADDI    1,SP                  ;restore stack
+;
+; Error service module
+;
+EPI0_1:
+        .if .BIGMODEL
+        LDP     _errno                ;load the correct the data page
+        .endif
+        LDI     ERANGE,R1             ;set error flag = 2 => range error
+        STI     R1,@_errno            ;store error flag
+        LDF     *+AR0(6),R0           ;return the machine's largest value
+        MPYF    R4,R0                 ;give appropriate sign
+        BD      AR2                   ;return from routine
+        POP     R5                    ;restore r5
+        POP     R4                    ;restore r4
+        ADDI    1,SP                  ;restore stack
+;
+; ====================== Register Parameter passsing ======================
+;
+   .else
+_sinh:  POP     AR2                   ;return address -> AR2
+        LDF     R2,R0                 ;x -> R0
+        BGTD    POS                   ;determine sign of x
+        PUSH    R4                    ;save R4 as an integer
+        PUSH    R5                    ;save R5 as a integer
+        LDF     1.0,R5                ;store positive sign for now
+        LDF     -1.0,R5               ;sign is negitive
+        MPYF    R5,R0                 ;sinh(-x) = sinh(x)
+POS:
+        .if .BIGMODEL
+        LDP     SINH_ADR              ;for large model set data page
+        .endif
+        LDI     @SINH_ADR,AR0         ;load data address in AR0
+;
+; Special considerations are given for arguements such that |x|<1,
+; in which a polynomial expansion is used as suggested by Cody and Waite.
+;
+        CMPF    1.0,R0                ;check to see if |x| < 1
+        BLE     POLY                  ;use special consideration
+        CMPF    *+AR0(8),R0           ;if x > MAXH then error
+        BGTD    EPI0_1                ;branch to error service module
+;
+; Here we use the normal reduction of arguement method
+;
+        MPYF    *AR0++,R0,R1          ;INVLOGe2*x -> y
+        ADDF    5.0e-1,R1             ; y + 0.5 -> y
+        FIX     R1,R1                 ;
+        FLOAT   R1,R4                 ; int(y) = n = R4
+        MPYF    *AR0++,R4,R1          ;C3*n -> R1
+        SUBF    R1,R0,R3              ;(x-C3*n) -> R3
+        MPYF    *AR0++,R4,R2          ;(C4*n) -> R2
+        SUBF    R2,R3,R3              ;(x-C3*n) - (C4*n) = g -> R3
+        MPYF    R3,R3,R1              ;g*g = z -> R1
+        MPYF    *AR0++,R1,R2          ;p1*z -> R2
+        ADDF    *AR0++,R2             ;p1*z + p0 -> R2
+        MPYF    R2,R3,R0              ;(p1*z  + p0)*g = p -> R0
+        MPYF    *AR0++,R1,R3          ;q1*z -> R3
+        ADDF    *AR0,R3,R3            ;q1*z + q0 = q -> R3
+        SUBF    R0,R3,R1              ;(q-p) -> R1
+				      ;R0/R1 = p/(q-p) -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        ADDF    0.5,R0                ;0.5 + p/(q-p) = r -> R0
+        LDF     R0,R2                 ;0.5 + p/(q-p) = r -> R2
+        FIX     R4,R4                 ;cast n as int
+        PUSH    AR2
+        LDI     R4,AR2                ;exponent
+        CALL    _ldexp                ;exp(x) = exp(g) * 2 ^ n
+        POP     AR2
+        PUSHF   R0                    ;save exp(x)
+        LDF     R0,R1                 ;setup the division of 1.0
+        LDF     1.0,R0                ;by exp(x)
+				      ;exp(-x)*2 = 1 / (exp(x)/2)
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        MPYF    0.25,R0               ;exp(-x)*2/4
+        POPF    R1                    ;load exp(x) into R1
+        SUBF    R0,R1,R0              ;sinh(x) = (exp(x)/2 - exp(-x)*2/4) * sign(x)
+        BD      AR2                   ;return from routine
+        MPYF    R0,R5,R0              ;sihn(-x) = -sinh(x)
+        POP     R5                    ;restore r5
+        POP     R4                    ;restore r4
+;
+;   Polynomial expansion
+;
+POLY:   MPYF    R0,R0,R1              ;g = x*x -> R1
+        .if .BIGMODEL
+        LDP     POLY_ADR              ;load data page for large model
+        .endif
+        LDI     @POLY_ADR,AR0         ;load data address in AR0
+        MPYF    *AR0++,R1,R2          ;SHP1*g -> R2
+        PUSHF   R0                    ;save x
+        ADDF    *AR0++,R2,R2          ;SHP1*g + SHP0 = p -> R2
+        MPYF    R0,R1,R4              ;x*g -> R4
+        ADDF    *AR0++,R1,R3          ;g + SHQ0 = q -> R3
+        LDF     R2,R0                 ;setup the division of q
+        LDF     R3,R1                 ;by q
+				      ; p/q
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+        MPYF    R0,R4                 ;x*g*(p/q) -> R4
+        POPF    R0                    ;restore x
+        ADDF    R4,R0                 ;compute x+x*g*(p/q)
+        BD      AR2                   ;return from routine
+        MPYF    R5,R0                 ;sinh(-x) = - sinh(x)
+        POP     R5                    ;restore r5
+        POP     R4                    ;restore r4
+;
+; Error service module
+;
+EPI0_1:
+        .if .BIGMODEL
+        LDP     _errno                ;load the correct the data page
+        .endif
+        LDI     ERANGE,R1             ;set error flag = 2 => range error
+        STI     R1,@_errno            ;store error flag
+        LDF     *+AR0(6),R0           ;return the machine's largest value
+        MPYF    R4,R0                 ;give appropriate sign
+        BD      AR2                   ;return from routine
+        POP     R5                    ;restore r5
+        POP     R4                    ;restore r4
+        ADDI    1,SP                  ;restore stack
+   .endif
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+ .if .BIGMODEL
+SINH_ADR:       .word   SINH
+POLY_ADR:       .word   POLY_D
+ .else
+		.bss SINH_ADR,1
+		.bss POLY_ADR,1
+		.sect ".cinit"
+		.word 1, SINH_ADR, SINH
+		.word 1, POLY_ADR, POLY_D
+		.text
+ .endif
+
+SINH            .float  1.4426950408889634074            ; INVLOGe2
+                .float  0.693359375                      ; C3
+                .float  -2.121944400546905e-4            ; C4
+                .float  4.1602886268e-3                  ; p1
+                .float  2.499999995e-1                   ; p0
+                .float  4.9987178778e-2                  ; q1
+                .float  0.5000                           ; q0
+                .float        3.4028235e+38              ; HUGH_VAL
+                .float   89.41598624                     ; MAXH
+
+POLY_D          .float  -0.190333399                     ; SHP1
+                .float  -0.713793159e1                   ; SHP0
+                .float  -0.428277109e2                   ; SHQ0
+	.end
+
+
+tan.asm/        925425296   0     0     0       3405      `
+	.length  85
+	.width   132
+*************************************************************************
+* TAN V5.11 - Tangent
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double tan(double x);
+*
+*    Outputs:        Returns the tangent of x
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR2,R0,R1,R2,R3,R4,DP,SP                       *
+*    Other calls:    DIV_F30                                            *
+*									*
+*  N = int(x * 2 / PI)							*
+*									*
+*  f = mantissa x							*
+*									*
+*  g = f * f								*
+*									*
+*  xnum = f * p1 * g + 1						*
+*									*
+*  xden = (q2 * g + q1) * g + 1 					*
+*									*
+*  if N is even, result = xnum / xden					*
+*									*
+*  if N is odd, result = xden / - xnum					*
+*									*
+*  For x < -2 ^ 31 or x > 2 ^ 31, tan will return an incorrect answer	*
+*************************************************************************
+
+	.def _tan
+   .if .tms320C40
+	.ref DIV_F40
+   .else
+	.ref DIV_F30
+   .endif
+
+	.text
+;
+; Initialization: get arguement, set up data pointer, and save registers
+;
+_tan:   POP     AR2                   ;return address -> AR2
+        .if  .REGPARM == 0
+	LDI     SP,AR0
+        LDF     *-AR0(0),R1           ;x -> R1
+        .else
+        LDF     R2,R1
+        .endif
+        .if .BIGMODEL
+	LDP	TAN_ADR 	      ;save data page
+        .endif
+	PUSH	R4		      ;save integer value in R4
+	LDI	@TAN_ADR,AR0	      ;load data address in AR0
+	MPYF	*AR0++,R1,R0	      ;2x / PI -> R0
+	FIX	R0,R2		      ;N = integer R0
+	FLOAT	R2		      ;XN = float N
+	SUBF	R2,R0		      ;fraction R0 -> R0
+	CMPF	0.5,R0		      ;compare R0 to 0.5
+	LDFNN	1.0,R0		      ;if R0 > 0.5, 1 -> R0
+	LDFN	0.0,R0		      ;if R0 < 0.5, 0 -> R0
+	ADDF	R0,R2		      ;N = R0 + N to round N
+;
+; Compute xnum and xden
+;
+	MPYF	*AR0++,R2,R0	      ;1.5703125 * R3 -> R0
+	SUBF	R0,R1		      ;x = x - R0
+	MPYF	*AR0++,R2,R0	      ;4.83826794897e-4 * R3 -> R0
+	SUBF	R0,R1		      ;f = x - XN * PI / 2
+	MPYF	R1,R1,R3	      ;g = f * f
+	MPYF	*AR0++,R3,R4	      ;-0.958017723e-1 * g -> R4
+	MPYF	R1,R4		      ;R4 * f -> R4
+	ADDF	R1,R4		      ;xnum = f + R4
+	MPYF	*AR0++,R3,R0	      ;0.971685835e-2 * g -> R0
+	ADDF	*AR0++,R0	      ;-0.429135777 + R0 -> R0
+	FIX	R2		      ;prepare N for evenness test
+	TSTB	1,R2		      ;test N for evenness
+	BNZD	TANB1		      ;branch to TANB1 if N is odd
+	MPYF	R3,R0		      ;R0 * g -> R0
+	ADDF	1.0,R0		      ;xden = R0 + 1
+	NEGF	R4,R1		     ;xnum = - xnum
+	LDF	R0,R1		      ;if N is even, xden -> R1
+	LDF	R4,R0		      ;xnum -> R0
+				      ;R0 / R1 -> R0
+       .if .tms320C40
+TANB1:	 CALL DIV_F40
+       .else
+TANB1:	 CALL DIV_F30
+       .endif
+        BD      AR2                   ;return from routine
+	POP	R4		      ;restore R4
+        NOP
+        NOP
+
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+ .if .BIGMODEL
+TAN_ADR:        .word   TAN
+ .else
+		.bss TAN_ADR,1
+		.sect ".cinit"
+		.word 1, TAN_ADR, TAN
+		.text
+
+ .endif
+TAN             .float  0.636619772367581
+		.float	1.5703125
+		.float	4.83826794897e-4
+		.float -0.9580177e-1
+		.float	0.971685835e-2
+		.float -0.429135777
+
+	.end
+
+
+tanh.asm/       925425298   0     0     0       5987      `
+	.length  85
+	.width   132
+*************************************************************************
+* TANH V5.11 - Hyperbolic tangent
+* Copyright (c) 1992-1999 Texas Instruments Incorporated
+*************************************************************************
+*    Syntax:         double tanh(double x);
+*
+*    Outputs:        Returns the hyperbolic tangent of x
+*    Status:         Set from result in R0.
+*    Registers used: AR0,AR2,R0,R1,R2,R3,R6,DP,SP                       *
+*    Other calls:    _exp, DIV_F30                                      *
+*									*
+*  f = abs(x)								*
+*									*
+*  if f < ln(3) / 2,							*
+*									*
+*	g = f * f							*
+*									*
+*	R = g * (p1 * g + p0) / (g + q0)				*
+*									*
+*	result = f + f * R						*
+*									*
+*  if f > ln(3) / 2, result = 1 - 2 / (exp(2f) + 1)			*
+*									*
+*  if x < 0, result = - result						*
+*									*
+*************************************************************************
+
+	.def _tanh
+	.ref _exp
+   .if .tms320C40
+	.ref DIV_F40
+   .else
+	.ref DIV_F30
+   .endif
+
+	.text
+;
+; ====================== Stack    Parameter passsing ======================
+;
+   .if .REGPARM == 0
+;
+; Initialization: get arguement, setup data pointer, and save registers
+;
+_tanh:	POP	AR2		      ;return address -> AR2
+	POPF	R1		      ;x -> R1
+        PUSHF   R6                    ;save R6 as a float
+        .if  .BIGMODEL
+	LDP	TANH_ADR	      ;load data page
+        .endif
+        LDF     1.0,R6                ;assume positive sign
+        CMPF    0.0,R1                ;if negitive then
+        LDFN    -1.0,R6               ;change sign if necessary
+	ABSF	R1		      ;x = abs(x)
+;
+; Determine which branch of the algorithm to use
+;
+	LDI	@TANH_ADR,AR0	      ;load data address into AR0
+	CMPF	*AR0++,R1	      ;compare x to ln(3) / 2
+	BN	TANHB1		      ;if x < ln(3) / 2, branch to TANHB1
+        CMPF    *+AR0(3),R1           ;compare x to XBIG
+        BGED    TANHB2                ;if x >= XBIG , branch to TANHB2
+        LDF     1.0,R0                ; return sign(x) * 1.0
+        NOP
+	ADDF	R1,R1		      ;2x -> R1
+	PUSHF	R1		      ;save R1
+	CALL	_exp		      ;exp(2x) -> R0
+	SUBI    1,SP                  ;restore stack pointer
+	ADDF	1.0,R0		      ;1 + exp(2x)
+	NEGF	R0,R1		      ;- (1 + exp(2x)) -> R1
+	LDF	1.0,R0		      ;1 -> R0
+				      ;1 / - (1 + exp(2x))
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+	BD	TANHB2		      ;branch to TANHB2
+	ADDF	0.5,R0		      ;1 / - (1 + exp(2x)) + 0.5 -> R0
+	ADDF	R0,R0		      ;tanh(x) = 1 - 2 / (exp(2x) + 1)
+        NOP
+TANHB1: MPYF	R1,R1,R3	      ;g = x * x
+	MPYF	*AR0++,R3,R0	      ;-0.3831010775e-2 * g -> R0
+	ADDF	*AR0++,R0	      ;P = -0.823772785 + R0
+	MPYF	R3,R0		      ;P * g -> R0
+	PUSHF	R1		      ;save x
+	ADDF	*AR0++,R3,R1	      ;Q = 0.2471319685e1 + g
+				      ;g * P / Q -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+	POPF	R1		      ;x -> R1
+	MPYF	R1,R0		      ;x * g * P / Q
+	ADDF	R1,R0		      ;tanh(x) = x + x * g * P / Q
+TANHB2: BD      AR2                   ;return from routine
+        MPYF    R6,R0                 ;tanh(x) = sign(x)*tanh(|x|)
+        POPF    R6                    ;restore R6
+	ADDI	1,SP		      ;restore stack pointer
+
+;
+; ====================== Register Parameter passsing ======================
+;
+   .else
+;
+; Initialization: get arguement, setup data pointer, and save registers
+;
+_tanh:	POP	AR2		      ;return address -> AR2
+        PUSHF   R6                    ;save R6 as a float
+        .if  .BIGMODEL
+	LDP	TANH_ADR	      ;load data page
+        .endif
+        LDF     1.0,R6                ;assume positive sign
+        CMPF    0.0,R2                ;if negitive then
+        LDFN    -1.0,R6               ;change sign if necessary
+        ABSF    R2,R1                 ;x = abs(x)
+;
+; Determine which branch of the algorithm to use
+;
+	LDI	@TANH_ADR,AR0	      ;load data address into AR0
+	CMPF	*AR0++,R1	      ;compare x to ln(3) / 2
+	BN	TANHB1		      ;if x < ln(3) / 2, branch to TANHB1
+        CMPF    *+AR0(3),R1           ;compare x to XBIG
+        BGED    TANHB2                ;if x >= XBIG , branch to TANHB2
+        LDF     1.0,R0                ; return sign(x) * 1.0
+        NOP
+        ADDF    R1,R1,R2              ;2x -> R2
+	CALL	_exp		      ;exp(2x) -> R0
+	ADDF	1.0,R0		      ;1 + exp(2x)
+	NEGF	R0,R1		      ;- (1 + exp(2x)) -> R1
+	LDF	1.0,R0		      ;1 -> R0
+				      ;1 / - (1 + exp(2x))
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+	BD	TANHB2		      ;branch to TANHB2
+	ADDF	0.5,R0		      ;1 / - (1 + exp(2x)) + 0.5 -> R0
+	ADDF	R0,R0		      ;tanh(x) = 1 - 2 / (exp(2x) + 1)
+        NOP
+TANHB1: MPYF	R1,R1,R3	      ;g = x * x
+	MPYF	*AR0++,R3,R0	      ;-0.3831010775e-2 * g -> R0
+	ADDF	*AR0++,R0	      ;P = -0.823772785 + R0
+	MPYF	R3,R0		      ;P * g -> R0
+	PUSHF	R1		      ;save x
+	ADDF	*AR0++,R3,R1	      ;Q = 0.2471319685e1 + g
+				      ;g * P / Q -> R0
+       .if .tms320C40
+	 CALL DIV_F40
+       .else
+	 CALL DIV_F30
+       .endif
+	POPF	R1		      ;x -> R1
+	MPYF	R1,R0		      ;x * g * P / Q
+	ADDF	R1,R0		      ;tanh(x) = x + x * g * P / Q
+TANHB2: BD      AR2                   ;return from routine
+        MPYF    R6,R0                 ;tanh(x) = sign(x)*tanh(|x|)
+        POPF    R6                    ;restore R6
+        NOP
+   .endif
+***********************************************************************
+*  DEFINE CONSTANTS
+***********************************************************************
+ .if .BIGMODEL
+TANH_ADR:       .word   TANH
+ .else
+		.bss TANH_ADR, 1  
+		.sect ".cinit"
+		.word 1, TANH_ADR, TANH
+		.text
+ .endif
+
+TANH            .float  0.549306144334054
+		.float -0.3831010775e-2
+		.float -0.823772785
+		.float	0.2471319685e+1
+                .float 8.664339757            ; (BITS/2 + 1) * ln(2)
+	.end
+
+

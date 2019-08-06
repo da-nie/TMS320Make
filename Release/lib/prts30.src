@@ -1,0 +1,942 @@
+!<arch>
+bus30.h/        925425248   0     0     0       5512      `
+/*****************************************************************************/
+/* bus30.h V5.11                                                            */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated		     */
+/*****************************************************************************/
+#ifndef _BUS30
+#define _BUS30
+
+
+#define exp_gcontrol      _egctrl._intval
+#define exp_gcontrol_bit  _egctrl._bitval
+#define prim_gcontrol     _pgctrl._intval
+#define prim_gcontrol_bit _pgctrl._bitval
+
+/**************************************************************************/
+/* MACRO DEFINITION FOR BUS BASE ADDRESS                                  */
+/**************************************************************************/
+#define BUS_BASE        0x808060
+#define BUS_ADDR      	((BUS_REG *) ((char *) BUS_BASE))
+
+/**************************************************************************/
+/* STRUCTURE DEFINITION FOR PRIM AND EXP BUS GLOBAL CONTROL REGISTERS     */
+/**************************************************************************/
+typedef union
+{
+    volatile unsigned int _intval;
+    struct
+    {
+         volatile unsigned int holdst   :1;            /* Hold status bit */
+         unsigned int nohold   :1;                    /* Port hold signal */
+         unsigned int hiz      :1;                       /* Internal hold */
+         unsigned int sww      :2;                       /* S/W wait mode */
+         unsigned int wtcnt    :3;                      /* S/W wait count */
+         unsigned int bnkcmp   :5;                        /* Bank compare */
+         unsigned int r_rest   :19;                           /* reserved */
+    } _bitval;
+} PRIMARY_BUS_CONTROL;
+
+typedef union
+{
+    unsigned int _intval;
+    struct
+    {
+         unsigned int r_012    :3;                            /* reserved */
+         unsigned int sww      :2;                       /* S/W wait mode */
+         unsigned int wtcnt    :3;                      /* S/W wait count */
+         unsigned int r_rest   :24;                           /* reserved */
+    } _bitval;
+} EXPANSION_BUS_CONTROL;
+
+
+/**************************************************************************/
+/* STRUCTURE DEFINITION FOR BUS REGISTERS                                 */
+/**************************************************************************/
+typedef struct
+{
+    EXPANSION_BUS_CONTROL _egctrl;     /* Exapansion bus control register */
+    unsigned int          reserved1[3];                       /* reserved */
+    PRIMARY_BUS_CONTROL   _pgctrl;        /* Primary bus control register */
+} BUS_REG;
+
+
+
+/**************************************************************************/
+/* BUS MACROS FOR BIT FIELD DEFINITIONS                                   */
+/**************************************************************************/
+/* Bus macros for global control registers integer assignments            */
+/* e.g. BUS_ADDR->prim_gcontrol = EXTERNAL_RDY | WS_1;   sets the         */
+/* corresponding bits of the primary bus control register.                */
+/**************************************************************************/
+#define HOLDST          0x1
+#define NOHOLD          0x2
+#define HIZ             0x4
+#define EXTERNAL_RDY    0x00
+#define INTERNAL_RDY    0x08
+#define OR_EXT_INT      0x10
+#define AND_EXT_INT     0x18
+#define WS_0            0x00
+#define WS_1            0x20
+#define WS_2            0x40
+#define WS_3            0x60
+#define WS_4            0x80
+#define WS_5            0xA0
+#define WS_6            0xC0
+#define WS_7            0xE0
+#define BANK_16M        0x00
+#define BANK_8M         0x100
+#define BANK_4M         0x200
+#define BANK_2M         0x300
+#define BANK_1M         0x400
+#define BANK_512K       0x500
+#define BANK_256K       0x600
+#define BANK_128K       0x700
+#define BANK_64K        0x800
+#define BANK_32K        0x900
+#define BANK_16K        0xA00
+#define BANK_8K         0xB00
+#define BANK_4K         0xC00
+#define BANK_2K         0xD00
+#define BANK_1K         0xE00
+#define BANK_512        0xF00
+#define BANK_256        0x1000
+
+
+/**************************************************************************/
+/* Bus macros for global control registers bit field assignments          */
+/* e.g. BUS_ADDR->prim_gcontrol_bit.sww = AND_RDY;                        */
+/*      BUS_ADDR->exp_gcontrol_bit.wtcnt = WAIT_2;                        */
+/* sets the appropriate bits of bus control registers.                    */
+/**************************************************************************/
+#define HOLD            1
+#define EXT_RDY         0
+#define INT_RDY         1
+#define OR_RDY          2
+#define AND_RDY         3
+#define BANK_SIZE_16M   0
+#define BANK_SIZE_8M    1
+#define BANK_SIZE_4M    2
+#define BANK_SIZE_2M    3
+#define BANK_SIZE_1M    4
+#define BANK_SIZE_512K  5
+#define BANK_SIZE_256K  6
+#define BANK_SIZE_128K  7
+#define BANK_SIZE_64K   8
+#define BANK_SIZE_32K   9
+#define BANK_SIZE_16K   10
+#define BANK_SIZE_8K    11
+#define BANK_SIZE_4K    12
+#define BANK_SIZE_2K    13
+#define BANK_SIZE_1K    14
+#define BANK_SIZE_512   15
+#define BANK_SIZE_256   16
+#define WAIT_0          0
+#define WAIT_1          1
+#define WAIT_2          2
+#define WAIT_3          3
+#define WAIT_4          4
+#define WAIT_5          5
+#define WAIT_6          6
+#define WAIT_7          7
+
+#endif /* #ifndef _BUS30 */
+
+bus32.h/        925425248   0     0     0       7334      `
+/*****************************************************************************/
+/* bus32.h V5.11                                                            */
+/* Copyright (c) 1994-1999 Texas Instruments Incorporated                    */
+/*****************************************************************************/
+#ifndef _BUS32
+#define _BUS32
+
+
+#define strb0_gcontrol      _s0ctrl._intval
+#define strb0_gcontrol_bit  _s0ctrl._bitval
+#define strb1_gcontrol      _s1ctrl._intval
+#define strb1_gcontrol_bit  _s1ctrl._bitval
+#define iostrb_gcontrol     _ioctrl._intval
+#define iostrb_gcontrol_bit _ioctrl._bitval
+
+/**************************************************************************/
+/* MACRO DEFINITION FOR BUS BASE ADDRESS                                  */
+/**************************************************************************/
+#define BUS_BASE        0x808060
+#define BUS_ADDR        ((BUS_REG *) ((char *) BUS_BASE))
+
+/**************************************************************************/
+/* Structure definition for STRB0, STRB1, and IOSTRB bus Global Control Registers    */
+/**************************************************************************/
+typedef union
+{
+    volatile unsigned int _intval;
+    struct
+    {
+	 volatile unsigned int holdst   :1;     /* Hold status bit       */
+	 unsigned int nohold   :1;     /* Port hold signal      */
+	 unsigned int hiz      :1;     /* Internal hold         */
+	 unsigned int sww      :2;     /* S/W wait mode         */
+	 unsigned int wtcnt    :3;     /* S/W wait count        */
+	 unsigned int bnkcmp   :5;     /* Bank compare          */
+	 unsigned int r_131415 :3;     /* reserved              */
+	 unsigned int datasize :2;     /* Data Type Size        */
+	 unsigned int memwidth :2;     /* Physical Memory Width */
+	 unsigned int signext  :1;     /* Sign Extend/Zero Fill */
+	 unsigned int strbcnfg :1;     /* Strobe Config         */
+	 unsigned int strbsw   :1;     /* Strobe Switch         */
+	 unsigned int r_rest   :9;     /* reserved              */
+    } _bitval;
+} STRB0_BUS_CONTROL;
+
+typedef union
+{
+    volatile unsigned int _intval;
+    struct
+    {
+	 unsigned int r_012    :3;     /* reserved              */
+	 unsigned int sww      :2;     /* S/W wait mode         */
+	 unsigned int wtcnt    :3;     /* S/W wait count        */
+	 unsigned int bnkcmp   :5;     /* Bank compare          */
+	 unsigned int r_131415 :3;     /* reserved              */
+	 unsigned int datasize :2;     /* Data Type Size        */
+	 unsigned int memwidth :2;     /* Physical Memory Width */
+	 unsigned int signext  :1;     /* Sign Extend/Zero Fill */
+	 unsigned int r_rest   :11;    /* reserved              */
+    } _bitval;
+} STRB1_BUS_CONTROL;
+
+typedef union
+{
+    unsigned int _intval;
+    struct
+    {
+	 unsigned int r_012    :3;     /* reserved              */
+	 unsigned int sww      :2;     /* S/W wait mode         */
+	 unsigned int wtcnt    :3;     /* S/W wait count        */
+	 unsigned int r_rest   :24;    /* reserved              */
+    } _bitval;
+} IOSTRB_BUS_CONTROL;
+
+
+/**************************************************************************/
+/* STRUCTURE DEFINITION FOR BUS REGISTERS                                 */
+/**************************************************************************/
+typedef struct
+{
+    IOSTRB_BUS_CONTROL    _ioctrl;     /* IOSTRB Bus Control register */
+    unsigned int          reserved1[3]; /* reserved locations         */
+    STRB0_BUS_CONTROL     _s0ctrl;     /* STRB0 Bus Control Register */
+    unsigned int          reserved2[3]; /* reserved locations         */
+    STRB1_BUS_CONTROL     _s1ctrl;     /* STRB1 Bus Control Register */
+} BUS_REG;
+
+
+
+/**************************************************************************/
+/* BUS MACROS FOR BIT FIELD DEFINITIONS                                   */
+/**************************************************************************/
+/* Bus macros for STRB0, STRB1, and IOSTRB control registers integer      */
+/* assignments                                                            */
+/* e.g. BUS_ADDR->strb0_gcontrol = EXTERNAL_RDY | WS_1;   sets the        */
+/* corresponding bits of the STRB0 bus control register.                  */
+/**************************************************************************/
+#define HOLDST          0x1
+#define NOHOLD          0x2
+#define HIZ             0x4
+#define EXTERNAL_RDY    0x00
+#define INTERNAL_RDY    0x08
+#define OR_EXT_INT      0x10
+#define AND_EXT_INT     0x18
+#define WS_0            0x00
+#define WS_1            0x20
+#define WS_2            0x40
+#define WS_3            0x60
+#define WS_4            0x80
+#define WS_5            0xA0
+#define WS_6            0xC0
+#define WS_7            0xE0
+#define BANK_16M        0x00
+#define BANK_8M         0x100
+#define BANK_4M         0x200
+#define BANK_2M         0x300
+#define BANK_1M         0x400
+#define BANK_512K       0x500
+#define BANK_256K       0x600
+#define BANK_128K       0x700
+#define BANK_64K        0x800
+#define BANK_32K        0x900
+#define BANK_16K        0xA00
+#define BANK_8K         0xB00
+#define BANK_4K         0xC00
+#define BANK_2K         0xD00
+#define BANK_1K         0xE00
+#define BANK_512        0xF00
+#define BANK_256        0x1000
+#define DATA_32         0x30000
+#define DATA_16         0x10000
+#define DATA_8          0x00000
+#define MEMW_32         0xC0000
+#define MEMW_16         0x40000
+#define MEMW_8          0x00000
+#define SIGN_EXT        0x000000
+#define NO_SIGN_EXT     0x100000
+#define STRB0_1_CNFG    0x200000
+#define STRB0_CNFG      0x000000
+#define STRB_SW_XTRA    0x400000
+#define STRB_SW_NO      0x000000
+
+
+/**************************************************************************/
+/* Bus macros for STRB0, STRB1, and IOSTRB control registers bit field    */
+/* assignments                                                            */
+/* e.g. BUS_ADDR->strb0_gcontrol_bit.sww = AND_RDY;                       */
+/*      BUS_ADDR->strb1_gcontrol_bit.wtcnt = WAIT_2;                      */
+/* sets the appropriate bits of STRB0 & STRB1bus control registers.       */
+/**************************************************************************/
+#define HOLD            1
+#define EXT_RDY         0
+#define INT_RDY         1
+#define OR_RDY          2
+#define AND_RDY         3
+#define BANK_SIZE_16M   0
+#define BANK_SIZE_8M    1
+#define BANK_SIZE_4M    2
+#define BANK_SIZE_2M    3
+#define BANK_SIZE_1M    4
+#define BANK_SIZE_512K  5
+#define BANK_SIZE_256K  6
+#define BANK_SIZE_128K  7
+#define BANK_SIZE_64K   8
+#define BANK_SIZE_32K   9
+#define BANK_SIZE_16K   10
+#define BANK_SIZE_8K    11
+#define BANK_SIZE_4K    12
+#define BANK_SIZE_2K    13
+#define BANK_SIZE_1K    14
+#define BANK_SIZE_512   15
+#define BANK_SIZE_256   16
+#define WAIT_0          0
+#define WAIT_1          1
+#define WAIT_2          2
+#define WAIT_3          3
+#define WAIT_4          4
+#define WAIT_5          5
+#define WAIT_6          6
+#define WAIT_7          7
+#define DATA_SIZE_32    3
+#define DATA_SIZE_16    1
+#define DATA_SIZE_8     0
+#define MEM_WIDTH_32    3
+#define MEM_WIDTH_16    1
+#define MEM_WIDTH_8     0
+
+#endif /* #ifndef _BUS32 */
+
+dma30.h/        925425248   0     0     0       4337      `
+/*****************************************************************************/
+/* dma30.h V5.11                                                            */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated		     */
+/*****************************************************************************/
+#ifndef _DMA30
+#define _DMA30
+
+
+#ifndef gcontrol
+#define gcontrol     _gctrl._intval
+#endif
+
+#ifndef gcontrol_bit
+#define gcontrol_bit _gctrl._bitval
+#endif
+
+/**************************************************************************/
+/* MACRO DEFINITIONS FOR DMA BASE ADDRESS                                 */
+/**************************************************************************/
+#define DMA_BASE        0x808000
+#define DMA_SIZE        16
+#define DMA_ADDR        ((DMA_REG *) ((char *) DMA_BASE))
+
+/**************************************************************************/
+/* STRUCTURE DEFINITION FOR DMA GLOBAL CONTROL REGISTER                   */
+/**************************************************************************/
+typedef union
+{
+    volatile unsigned int _intval;
+    struct
+    {
+         volatile unsigned int start    :2;         /* Start/Stop control */
+         volatile unsigned int stat     :2;                 /* DMA status */
+         unsigned int incsrc   :1;        /* Increment source addr ON/OFF */
+         unsigned int decsrc   :1;        /* Decrement source addr ON/OFF */
+         unsigned int incdst   :1;          /* Increment dest addr ON/OFF */
+         unsigned int decdst   :1;          /* Increment dest addr ON/OFF */
+         unsigned int sync     :2;         /* Source/dest synchronization */
+         unsigned int tc       :1;          /* Transfer terminate control */
+         unsigned int tcint    :1;        /* DMA interrupt to CPU control */
+         unsigned int r_rest   :20;                           /* reserved */
+    } _bitval;
+} DMA_CONTROL;
+
+/**************************************************************************/
+/* STRUCTURE DEFINITION FOR DMA REGISTERS                                 */
+/**************************************************************************/
+typedef struct
+{
+    DMA_CONTROL       _gctrl;                  /* Global control register */
+    unsigned int      reserved1[3];                           /* reserved */
+    volatile unsigned int source;              /* Source address register */
+    unsigned int      reserved2[1];                           /* reserved */
+    volatile unsigned int destination;    /* Destination address register */
+    unsigned int      reserved3[1];                           /* reserved */
+    volatile unsigned int transfer_counter;  /* Transfer counter register */
+} DMA_REG;
+
+
+/**************************************************************************/
+/* DMA MACROS FOR BIT FIELD DEFINITIONS                                   */
+/**************************************************************************/
+/* DMA macros for global control register integer assignments             */
+/* e.g. DMA_ADDR->gcontrol = START0 | SYNC1 | TCINT sets the corresponding*/
+/* bits of the DMA global control register                                */
+/**************************************************************************/
+#define START0     0x0
+#define START1     0x1
+#define START2     0x2
+#define START3     0x3
+#define STAT0      0x0
+#define STAT1      0x4
+#define STAT2      0x8
+#define STAT3      0xC
+#define INCSRC     0x10
+#define DECSRC     0x20
+#define INCDST     0x40
+#define DECDST     0x80
+#define SYNC0      0x00
+#define SYNC1      0x100
+#define SYNC2      0x200
+#define SYNC3      0x300
+#define TC         0x400
+#define TCINT      0x800
+
+
+/**************************************************************************/
+/* DMA macros for global control register bit field assignments           */
+/* e.g. DMA_ADDR->gcontrol.incsrc = INCREMENT;                            */
+/* e.g. DMA_ADDR->gcontrol.incdst = INCREMENT;                            */
+/* sets the appropriate bits of the DMA global control register           */
+/**************************************************************************/
+#define INCREMENT  1
+#define DECREMENT  1
+#define TERMINATE  1
+
+#endif /* #ifndef _DMA30 */
+
+
+dma32.h/        925425248   0     0     0       4604      `
+/*****************************************************************************/
+/* dma32.h V5.11                                                            */
+/* Copyright (c) 1994-1999 Texas Instruments Incorporated                    */
+/*****************************************************************************/
+#ifndef _DMA32
+#define _DMA32
+
+
+#ifndef gcontrol
+#define gcontrol     _gctrl._intval
+#endif
+
+#ifndef gcontrol_bit
+#define gcontrol_bit _gctrl._bitval
+#endif
+
+/**************************************************************************/
+/* MACRO DEFINITIONS FOR DMA BASE ADDRESS                                 */
+/**************************************************************************/
+#define DMA_BASE        0x808000
+#define DMA_SIZE        16
+#define DMA_ADDR(A)     ((DMA_REG *) ((char *) DMA_BASE + (A << 4)))
+
+/**************************************************************************/
+/* STRUCTURE DEFINITION FOR DMA GLOBAL CONTROL REGISTER                   */
+/**************************************************************************/
+typedef union
+{
+    volatile unsigned int _intval;
+    struct
+    {
+	 volatile unsigned int start    :2;   /* Start/Stop control           */
+	 volatile unsigned int stat     :2;   /* DMA status                   */
+	 unsigned int incsrc   :1;   /* Increment source addr ON/OFF */
+	 unsigned int decsrc   :1;   /* Decrement source addr ON/OFF */
+	 unsigned int incdst   :1;   /* Increment dest addr ON/OFF   */
+	 unsigned int decdst   :1;   /* Increment dest addr ON/OFF   */
+	 unsigned int sync     :2;   /* Source/dest synchronization  */
+	 unsigned int tc       :1;   /* Transfer terminate control   */
+	 unsigned int tcint    :1;   /* DMA interrupt to CPU control */
+	 unsigned int dma_pri  :2;   /* DMA Priority                 */
+	 unsigned int pri_mode :1;   /* DMA Priority Mode            */
+	 unsigned int r_rest   :17;                    /* reserved   */
+    } _bitval;
+} DMA_CONTROL;
+
+/**************************************************************************/
+/* STRUCTURE DEFINITION FOR DMA REGISTERS                                 */
+/**************************************************************************/
+typedef struct
+{
+    DMA_CONTROL            _gctrl;             /* Global control register */
+    unsigned int  reserved1[3];                               /* reserved */
+    volatile unsigned int  source;             /* Source address register */
+    unsigned int  reserved2[1];                               /* reserved */
+    volatile unsigned int  destination;   /* Destination address register */
+    unsigned int  reserved3[1];                               /* reserved */
+    volatile unsigned int  transfer_counter; /* Transfer counter register */
+} DMA_REG;
+
+
+/**************************************************************************/
+/* DMA MACROS FOR BIT FIELD DEFINITIONS                                   */
+/**************************************************************************/
+/* DMA macros for global control register integer assignments             */
+/* e.g. DMA_ADDR->gcontrol = START0 | SYNC1 | TCINT sets the corresponding*/
+/* bits of the DMA global control register                                */
+/**************************************************************************/
+#define START0     0x0
+#define START1     0x1
+#define START2     0x2
+#define START3     0x3
+#define STAT0      0x0
+#define STAT1      0x4
+#define STAT2      0x8
+#define STAT3      0xC
+#define INCSRC     0x10
+#define DECSRC     0x20
+#define INCDST     0x40
+#define DECDST     0x80
+#define SYNC0      0x00
+#define SYNC1      0x100
+#define SYNC2      0x200
+#define SYNC3      0x300
+#define TC         0x400
+#define TCINT      0x800
+#define CPU_PRI    0x0000
+#define DMA_PRI    0x3000
+#define ROT_ARB    0x1000
+#define ROT_PRI    0x0000
+#define FIX_PRI    0x4000
+
+
+/**************************************************************************/
+/* DMA macros for global control register bit field assignments           */
+/* e.g. DMA_ADDR->gcontrol.incsrc = INCREMENT;                            */
+/* e.g. DMA_ADDR->gcontrol.incdst = INCREMENT;                            */
+/* sets the appropriate bits of the DMA global control register           */
+/**************************************************************************/
+#define INCREMENT    1
+#define DECREMENT    1
+#define TERMINATE    1
+#define CPU_PRIORITY 0
+#define DMA_PRIORITY 3
+#define CPU_DMA_ROT  1
+
+#endif /* #ifndef _DMA32 */
+
+serprt30.h/     925425248   0     0     0       13179     `
+/*****************************************************************************/
+/* serprt30.h V5.11                                                         */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated		     */
+/*****************************************************************************/
+#ifndef _SERPRT30
+#define _SERPRT30
+
+#ifndef gcontrol
+#define gcontrol            _gctrl._intval
+#endif
+
+#ifndef gcontrol_bit
+#define gcontrol_bit        _gctrl._bitval
+#endif
+
+#define s_x_control       _xctrl._intval
+#define s_x_control_bit   _xctrl._bitval
+#define s_r_control       _rctrl._intval
+#define s_r_control_bit   _rctrl._bitval
+#define s_rxt_control     _rxtctrl._intval
+#define s_rxt_control_bit _rxtctrl._bitval
+#define s_rxt_counter     _rxtcounter._intval
+#define s_rxt_counter_bit _rxtcounter._bitval
+#define s_rxt_period      _rxtperiod._intval
+#define s_rxt_period_bit  _rxtperiod._bitval
+
+
+/**************************************************************************/
+/* MACRO DEFINITIONS FOR SERIAL PORT BASE ADDRESS                         */
+/**************************************************************************/
+#define SERIAL_PORT_ZERO    0
+#define SERIAL_PORT_ONE     1
+#define SERIAL_PORT_BASE    0x808040
+#define SERIAL_PORT_SIZE    16
+#define SERIAL_PORT_ADDR(n) ((SERIAL_PORT_REG *) ((char *) \
+                            SERIAL_PORT_BASE + (n)*SERIAL_PORT_SIZE))
+
+/**************************************************************************/
+/* STRUCTURE DEFINTION FOR SERIAL PORT GLOBAL CONTROL REGISTER            */
+/**************************************************************************/
+typedef union
+{
+    volatile unsigned int _intval;
+    struct
+    {
+         volatile unsigned int rrdy     :1;         /* Receive ready flag */
+         volatile unsigned int xrdy     :1;       /* Transmitt ready flag */
+         unsigned int fsxout   :1;                   /* FSX configuration */
+         volatile unsigned int xsrempty :1;     /* Transm shift reg empty */
+         volatile unsigned int rsrfull  :1;     /* Receive registers full */
+         unsigned int hs       :1;             /* Handshaking mode enable */
+         unsigned int xclksrce :1;                 /* Transm clock source */
+         unsigned int rclksrce :1;                /* Receive clock source */
+         unsigned int xvaren   :1;          /* Transm data rate signaling */
+         unsigned int rvaren   :1;          /* Receiv data rate signaling */
+         unsigned int xfsm     :1;              /* Transm frame sync mode */
+         unsigned int rfsm     :1;              /* Receiv frame sync mode */
+         unsigned int clkxp    :1;               /* Transm clock polarity */
+         unsigned int clkrp    :1;               /* Receiv clock polarity */
+         unsigned int dxp      :1;                /* Transm data polarity */
+         unsigned int drp      :1;                /* Receiv data priority */
+         unsigned int fsxp     :1;          /* Transm frame sync polarity */
+         unsigned int fsrp     :1;          /* Receiv frame sync polarity */
+         unsigned int xlen     :2;             /* Transm data word length */
+         unsigned int rlen     :2;             /* Receiv data word length */
+         unsigned int xtint    :1;       /* Transm timer interrupt enable */
+         unsigned int xint     :1;             /* Transm interrupt enable */
+         unsigned int rtint    :1;       /* Receiv timer interrupt enable */
+         unsigned int rint     :1;             /* Receiv interrupt enable */
+         unsigned int xreset   :1;                        /* Transm reset */
+         unsigned int rreset   :1;                        /* Receiv reset */
+         unsigned int r_rest   :4;                            /* reserved */
+    } _bitval;
+} SERIAL_PORT_CONTROL;
+
+/**************************************************************************/
+/* STRUCTURE DEFINTION FOR SERIAL PORT RECEIVE/TRANSMIT PORT CONTROL      */
+/* REGISTER                                                               */
+/**************************************************************************/
+typedef union
+{
+    volatile unsigned int _intval;
+    struct
+    {
+         unsigned int clkfunc  :1;              /* Clock function control */
+         unsigned int clki_o   :1;                   /* Clock i/o control */
+         unsigned int clkdato  :1;                /* Data output on clock */
+         volatile unsigned int clkdati  :1;        /* Data input on clock */
+         unsigned int dfunc    :1;               /* Data function control */
+         unsigned int di_o     :1;                    /* Data i/o control */
+         unsigned int ddatout  :1;                 /* Data output on data */
+         volatile unsigned int ddatin   :1;         /* Data input on data */
+         unsigned int fsfunc   :1;         /* Frame sync function control */
+         unsigned int fsi_o    :1;              /* Frame sync i/o control */
+         unsigned int fsdatout :1;           /* Data output on frame sync */
+         volatile unsigned int fsdatin  :1;   /* Data input on frame sync */
+         unsigned int r_rest   :20;                           /* reserved */
+    } _bitval;
+} RX_PORT_CONTROL;
+
+/**************************************************************************/
+/* STRUCTURE DEFINTION FOR SERIAL PORT RECEIVE/TRANSMIT TIMER CONTROL     */
+/* REGISTER                                                               */
+/**************************************************************************/
+typedef union
+{
+    volatile unsigned int _intval;
+    struct
+    {
+         unsigned int xgo      :1;      /* Reset and start transmit timer */
+         unsigned int xhld_    :1;                   /* Transm timer hold */
+         unsigned int xcp_     :1;                   /* Transm clock mode */
+         unsigned int xclksrc  :1;                 /* Transm clock source */
+         unsigned int r_4      :1;                            /* reserved */
+         volatile unsigned int xtstat   :1;        /* Transmit timer stat */
+         unsigned int rgo      :1;       /* Reset and start receive timer */
+         unsigned int rhld_    :1;                  /* Receive timer hold */
+         unsigned int rcp_     :1;                  /* Receive clock mode */
+         unsigned int rclksrc  :1;                /* Receive clock source */
+         unsigned int r_10     :1;                            /* reserved */
+         volatile unsigned int rtstat   :1;         /* Receive timer stat */
+         unsigned int r_rest   :20;                           /* reserved */
+    } _bitval;
+} RX_TIMER_CONTROL;
+
+/**************************************************************************/
+/* STRUCTURE DEFINTION FOR SERIAL PORT RECEIVE/TRANSMIT TIMER COUNTER     */
+/* REGISTER                                                               */
+/**************************************************************************/
+typedef union
+{
+    volatile unsigned int _intval;
+    struct
+    {
+         volatile unsigned int x_counter:16;     /* Transmit timer counter */
+         volatile unsigned int r_counter:16;     /* Receive timer counter */
+    } _bitval;
+} RX_TIMER_COUNTER;
+
+/**************************************************************************/
+/* STRUCTURE DEFINTION FOR SERIAL PORT RECEIVE/TRANSMIT TIMER PERIOD      */
+/* REGISTER                                                               */
+/**************************************************************************/
+typedef union
+{
+    unsigned int _intval;
+    struct
+    {
+         unsigned int x_period :16;              /* Transmit timer period */
+         unsigned int r_period :16;               /* Receive timer period */
+    } _bitval;
+} RX_TIMER_PERIOD;
+
+/**************************************************************************/
+/* STRUCTURE DEFINITION FOR SERIAL PORT REGISTERS                         */
+/**************************************************************************/
+typedef struct
+{
+    SERIAL_PORT_CONTROL _gctrl;            /* Serial port global control */
+    unsigned int        reserved1;                           /* reserved */
+    RX_PORT_CONTROL     _xctrl;                   /* Transm port control */
+    RX_PORT_CONTROL     _rctrl;                  /* Receive port control */
+    RX_TIMER_CONTROL    _rxtctrl;      /* Receive/transmit timer control */
+    RX_TIMER_COUNTER    _rxtcounter;   /* Receive/transmit timer counter */
+    RX_TIMER_PERIOD     _rxtperiod;     /* Receive/transmit timer period */
+    unsigned int        reserved2;                           /* reserved */
+    unsigned int        x_data;             /* Serial port transmit data */
+    unsigned int        reserved3[3];                        /* reserved */
+    volatile unsigned int        r_data;     /* Serial port receive data */
+    unsigned int        reserved4[3];                        /* reserved */
+} SERIAL_PORT_REG;
+
+/**************************************************************************/
+/* SERIAL PORT MACROS FOR BIT FIELD DEFINITIONS                           */
+/**************************************************************************/
+/* Serial port macros for global control register integer assignments     */
+/* e.g. SERIAL_PORT_ADDR(0)->gcontrol = XVAREN | DXP | XLEN_16 set the    */
+/* corresponding bits of serial port 0's global control register          */
+/**************************************************************************/
+#define RRDY		0x1
+#define XRDY		0x2
+#define FSXOUT		0x4
+#define XSREMPTY	0x8
+#define RSRFULL 	0x10
+#define HS		0x20
+#define XCLKSRCE	0x40
+#define RCLKSRCE	0x80
+#define XVAREN		0x100
+#define RVAREN		0x200
+#define XFSM		0x400
+#define RFSM		0x800
+#define CLKXP		0x1000
+#define CLKRP		0x2000
+#define DXP		0x4000
+#define DRP		0x8000
+#define FSXP		0x10000
+#define FSRP		0x20000
+#define XLEN_8		0x00000
+#define XLEN_16 	0x40000
+#define XLEN_24 	0x80000
+#define XLEN_32 	0xC0000
+#define RLEN_8		0x000000
+#define RLEN_16 	0x100000
+#define RLEN_24 	0x200000
+#define RLEN_32 	0x300000
+#define XTINT		0x400000
+#define XINT		0x800000
+#define RTINT		0x1000000
+#define RINT		0x2000000
+#define XRESET		0x4000000
+#define RRESET		0x8000000
+
+#define INPUT_PIN       0
+#define OUTPUT_PIN      1
+#define DISABLED        0
+#define ENABLED         1
+#define EXTERNAL        0
+#define INTERNAL        1
+#define FIXED           0
+#define VARIABLE        1
+#define CONTINUOUS      1
+#define STANDARD        0
+#define ACTIVE_HIGH     0
+#define ACTIVE_LOW      1
+#define EIGHT_BITS      0
+#define SIXTEEN_BITS    1
+#define TWENTY_FOUR_BITS 2
+#define THIRTY_TWO_BITS 3
+#define RESET           0
+#define UN_RESET        1
+
+/**************************************************************************/
+/* Serial port macros for fsx/dx/clkx control register integer            */
+/* assignments, e.g. SERIAL_PORT_ADDR(0)->s_x_control = CLKXFUNC | DXFUNC */
+/* sets the corresponding bits of serial port 0's fsx/dx/clkx control     */
+/* register                                                               */
+/**************************************************************************/
+#define CLKXFUNC	0x1
+#define CLKXI_O 	0x2
+#define CLKXDATOUT	0x4
+#define CLKXDATIN	0x8
+#define DXFUNC		0x10
+#define DXI_O		0x20
+#define DXDATOUT	0x40
+#define DXDATIN 	0x80
+#define FSXFUNC 	0x100
+#define FSXI_O		0x200
+#define FSXDATOUT	0x400
+#define FSXDATIN	0x800
+
+/**************************************************************************/
+/* Serial port macros for fsr/dr/clkr control register integer            */
+/* assignments, e.g. SERIAL_PORT_ADDR(0)->s_r_control = CLKRFUNC | DRFUNC */
+/* sets the corresponding bits of serial port 0's fsr/dr/clkr control     */
+/* register                                                               */
+/**************************************************************************/
+#define CLKRFUNC	0x1
+#define CLKRI_O 	0x2
+#define CLKRDATOUT	0x4
+#define CLKRDATIN	0x8
+#define DRFUNC		0x10
+#define DRI_O		0x20
+#define DRDATOUT	0x40
+#define DRDATIN 	0x80
+#define FSRFUNC 	0x100
+#define FSRI_O		0x200
+#define FSRDATOUT	0x400
+#define FSRDATIN	0x800
+
+#define GENERAL_PURPOSE_IO 0
+#define SERIAL_PORT_PIN 1
+
+/**************************************************************************/
+/* Serial port macros for receive/transmit timer control register integer */
+/* assignments, e.g. SERIAL_PORT_ADDR(0)->s_rxt_control = XGO | RGO       */
+/* sets the corresponding bits of serial port 0's receive/transmit control*/
+/* register                                                               */
+/**************************************************************************/
+#define XGO		0x1
+#define XHLD_		0x2
+#define XCP_		0x4
+#define XCLKSRC 	0x8
+#define XTSTAT		0x20
+#define RGO		0x40
+#define RHLD_		0x80
+#define RCP_		0x100
+#define RCLKSRC 	0x200
+#define RSTAT		0x800
+
+#endif /* #ifndef _SERPRT30 */
+
+
+timer30.h/      925425248   0     0     0       4645      `
+/*****************************************************************************/
+/* timer30.h V5.11                                                          */
+/* Copyright (c) 1992-1999 Texas Instruments Incorporated		     */
+/*****************************************************************************/
+#ifndef _TIMER30
+#define _TIMER30
+
+#ifndef gcontrol
+#define gcontrol     _gctrl._intval
+#endif
+
+#ifndef gcontrol_bit
+#define gcontrol_bit _gctrl._bitval
+#endif
+
+/**************************************************************************/
+/* MACRO DEFINITIONS FOR TIMER BASE ADDRESS                               */
+/**************************************************************************/
+#define TIMER_ZERO   0
+#define TIMER_ONE    1
+#define TIMER_BASE   0x808020
+#define TIMER_SIZE   16
+#define TIMER_ADDR(n) ((TIMER_REG *) ((char *) TIMER_BASE   \
+                                                        + (n)*TIMER_SIZE))
+
+
+#define TMR_HLD_0    TIMER_ADDR(0)->gcontrol  &= ~HLD_
+#define TMR_HLD_1    TIMER_ADDR(1)->gcontrol  &= ~HLD_
+
+/**************************************************************************/
+/* STRUCTURE DEFINITION FOR TIMER GLOBAL CONTROL REGISTER                 */
+/**************************************************************************/
+typedef union
+{
+    volatile unsigned int _intval;
+    struct
+    {
+         unsigned int func     :1;                  /* Timer pin function */
+         unsigned int i_o      :1;                   /* Timer i/o control */
+         unsigned int datout   :1;                /* Data output on timer */
+         volatile unsigned int datin    :1;        /* Data input on timer */
+         unsigned int r_45     :2;                            /* reserved */
+         unsigned int go       :1;               /* Reset and start timer */
+         unsigned int hld_     :1;                        /* Counter hold */
+         unsigned int cp_      :1;            /* Clock/pulse mode control */
+         unsigned int clksrc   :1;                        /* Clock source */
+         unsigned int inv      :1;                      /* Invert control */
+         volatile unsigned int tstat    :1;               /* Timer status */
+         unsigned int r_rest   :20;                           /* reserved */
+    } _bitval;
+} TIMER_CONTROL;
+
+/**************************************************************************/
+/* STRUCTURE DEFINITION FOR TIMER REGISTERS                               */
+/**************************************************************************/
+typedef struct
+{
+    TIMER_CONTROL     _gctrl;                     /* Timer global control */
+    unsigned int      reserved1[3];                           /* reserved */
+    volatile unsigned int      counter;                  /* Timer counter */
+    unsigned int      reserved2[3];                           /* reserved */
+    unsigned int      period;                             /* Timer period */
+} TIMER_REG;
+
+
+/**************************************************************************/
+/* TIMER MACROS FOR BIT FIELD DEFINITIONS                                 */
+/**************************************************************************/
+/* Timer macros for global control register integer assignments           */
+/* e.g. TIMER_ADDR(0)->gcontrol = FUNC | GO | HLD_ | CLKSRC sets the      */
+/* corresponding bits of timer 0's global control register                */
+/**************************************************************************/
+#define FUNC	   0x1
+#define I_O	   0x2
+#define DATOUT	   0x4
+#define DATIN	   0x8
+#define GO	   0x40
+#define HLD_	   0x80
+#define CP_	   0x100
+#define CLKSRC	   0x200
+#define INV	   0x400
+#define TSTAT	   0x800
+
+
+/**************************************************************************/
+/* Timer macros for global control register bit field assignments         */
+/* e.g. TIMER_ADDR(0)->gcontrol_bit.func = TIMER_PIN;                     */
+/*      TIMER_ADDR(0)->gcontrol_bit.go   = SET;                           */
+/*      TIMER_ADDR(0)->gcontrol_bit.hld_ = SET;                           */
+/*      TIMER_ADDR(0)->gcontrol_bit.clksrc = INTERNAL;                    */
+/* sets the appropriate bits of timer 0's global control register.        */
+/**************************************************************************/
+#define TIMER_PIN  1
+#define INPUT      0
+#define OUTPUT     1
+#define CLOCK_MODE 1
+#define PULSE_MODE 0
+#define INVERT     1
+#define NON_INVERT 0
+#define EXTERNAL   0
+#define INTERNAL   1
+
+#endif /* #ifndef _TIMER30 */
+
+
