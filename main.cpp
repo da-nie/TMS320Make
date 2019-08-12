@@ -7,10 +7,11 @@
 #include <algorithm>
 
 //------------------------------------------------------------------------------
+bool Processing(void);//запустить на выполнение
 void ProcessingFile(const std::string &path,const std::string &mask,std::vector<std::string> &file_array);//обработка
 void FindFile(const std::string &path,const std::string &mask,std::vector<std::string> &file_array);//обработка файлов
 void FindPath(const std::string &path,const std::string &mask,std::vector<std::string> &file_array);//обработка каталогов
-DWORD Execute(const char *name,const char *param,const char *directory);//запуск на выполнение
+DWORD Execute(const char *name,const char *param,const char *directory,bool use_stdout_and_stderror);//запуск на выполнение
 bool ProcessingCFiles(const std::string &path,const std::string &mask,const std::string &ac30_file_name,const std::string &include_file_name);//обработка c-файлов
 bool ProcessingIFFiles(const std::string &path,const std::string &opt30_file_name);//обработка if-файлов
 bool ProcessingOPTFiles(const std::string &path,const std::string &cg30_file_name);//обработка opt-файлов
@@ -22,9 +23,27 @@ bool ProcessingOBJFiles(const std::string &path,const std::string &lnk30_file_na
 //----------------------------------------------------------------------------------------------------
 int WINAPI WinMain(HINSTANCE hInstance,HINSTANCE hPrevstance,LPSTR lpstrCmdLine,int nCmdShow)
 {
+ if (Processing()==false)
+ {
+  fprintf(stderr," \r\nStop compilation.\r\n \r\n");
+  exit(EXIT_FAILURE);
+ }
+ exit(EXIT_SUCCESS);
+}
+
+//----------------------------------------------------------------------------------------------------
+//запустить на выполнение
+//----------------------------------------------------------------------------------------------------
+bool Processing(void)
+{
  //узнаем текущий каталог
  char path[MAX_PATH];
  GetCurrentDirectory(MAX_PATH,path);
+
+ //удаляем исполняемый файл
+ std::string output_file_name=path;
+ output_file_name+="\\out.out";
+ DeleteFile(output_file_name.c_str());
 
  //узнаем каталог инструментария
  char module_file_name[MAX_PATH];
@@ -33,34 +52,23 @@ int WINAPI WinMain(HINSTANCE hInstance,HINSTANCE hPrevstance,LPSTR lpstrCmdLine,
  std::string tools_file_name=module_file_name;
  tools_file_name+="\\";
 
- std::string libs_file_name=tools_file_name+"lib";
- std::string include_file_name=tools_file_name+"include";
- std::string ac30_file_name=tools_file_name+"bin\\ac30.exe";
- std::string opt30_file_name=tools_file_name+"bin\\opt30.exe";
- std::string cg30_file_name=tools_file_name+"bin\\cg30.exe";
- std::string asm30_file_name=tools_file_name+"bin\\asm30.exe";
- std::string lnk30_file_name=tools_file_name+"bin\\lnk30.exe";
+ std::string libs_file_name="\""+tools_file_name+"lib"+"\"";
+ std::string include_file_name="\""+tools_file_name+"include"+"\"";
+ std::string ac30_file_name="\""+tools_file_name+"bin\\ac30.exe"+"\"";
+ std::string opt30_file_name="\""+tools_file_name+"bin\\opt30.exe"+"\"";
+ std::string cg30_file_name="\""+tools_file_name+"bin\\cg30.exe"+"\"";
+ std::string asm30_file_name="\""+tools_file_name+"bin\\asm30.exe"+"\"";
+ std::string lnk30_file_name="\""+tools_file_name+"bin\\lnk30.exe"+"\"";
  
- if (ProcessingCFiles(path,".c",ac30_file_name,include_file_name)==false)
- {
-  fprintf(stderr,"Stop compilation.\r\n");
-  exit(EXIT_FAILURE);
- }
- if (ProcessingCFiles(path,".cc",ac30_file_name,include_file_name)==false)
- {
-  fprintf(stderr,"Stop compilation.\r\n");
-  exit(EXIT_FAILURE);
- }
- ProcessingIFFiles(path,opt30_file_name);
- ProcessingOPTFiles(path,cg30_file_name);
- ProcessingASMFiles(path,asm30_file_name);
- if (ProcessingOBJFiles(path,lnk30_file_name,libs_file_name)==false)
- {
-  fprintf(stderr,"Stop compilation.\r\n");
-  exit(EXIT_FAILURE);
- }
- exit(EXIT_SUCCESS);
+ if (ProcessingCFiles(path,".c",ac30_file_name,include_file_name)==false) return(false);
+ if (ProcessingCFiles(path,".cc",ac30_file_name,include_file_name)==false) return(false);
+ if (ProcessingIFFiles(path,opt30_file_name)==false) return(false);
+ if (ProcessingOPTFiles(path,cg30_file_name)==false) return(false);
+ if (ProcessingASMFiles(path,asm30_file_name)==false) return(false);
+ if (ProcessingOBJFiles(path,lnk30_file_name,libs_file_name)==false) return(false);
+ return(true);
 }
+
 //----------------------------------------------------------------------------------------------------
 //обработка
 //----------------------------------------------------------------------------------------------------
@@ -78,7 +86,7 @@ void FindFile(const std::string &path,const std::string &mask,std::vector<std::s
  WIN32_FIND_DATA wfd;
  HANDLE handle=FindFirstFile(mask.c_str(),&wfd);
  if (handle==INVALID_HANDLE_VALUE) return;
- while(1)
+ while(true)
  {
   if (wfd.cFileName[0]!='.' && !(wfd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY))//если это файл
   {
@@ -111,7 +119,7 @@ void FindPath(const std::string &path,const std::string &mask,std::vector<std::s
   SetCurrentDirectory(current_directory);
   return;
  }
- while(1)
+ while(true)
  {
   if (wfd.cFileName[0]!='.' && (wfd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY))//если это директория
   {   
@@ -130,35 +138,63 @@ void FindPath(const std::string &path,const std::string &mask,std::vector<std::s
 //----------------------------------------------------------------------------------------------------
 //запуск на выполнение
 //----------------------------------------------------------------------------------------------------
-DWORD Execute(const char *name,const char *param,const char *directory)
+DWORD Execute(const char *name,const char *param,const char *directory,bool use_stdout_and_stderror)
 {
- HANDLE hRead=GetStdHandle(STD_OUTPUT_HANDLE);
- SetStdHandle(STD_ERROR_HANDLE,hRead);
+ PROCESS_INFORMATION pi;
+ STARTUPINFO si;
 
- SHELLEXECUTEINFO lpSEI;
- lpSEI.cbSize=sizeof(SHELLEXECUTEINFO);
- lpSEI.fMask=SEE_MASK_NOCLOSEPROCESS;
- lpSEI.hwnd=NULL;
- lpSEI.lpVerb="open";
- lpSEI.lpFile=name;
- lpSEI.lpParameters=param;
- lpSEI.lpDirectory=directory;
- lpSEI.nShow=SW_MINIMIZE;
- lpSEI.hInstApp=NULL;
- ShellExecuteEx(&lpSEI);
- HANDLE hProcess=lpSEI.hProcess;
- WaitForInputIdle(hProcess,INFINITE);
- if (hProcess)
+ HANDLE duplicate_hStdOutput=INVALID_HANDLE_VALUE;
+ HANDLE duplicate_hStdError=INVALID_HANDLE_VALUE;
+
+ ZeroMemory(&si,sizeof(STARTUPINFO));
+ si.cb=sizeof(STARTUPINFO);
+ si.dwFlags=STARTF_USESHOWWINDOW|STARTF_FORCEOFFFEEDBACK;
+ si.wShowWindow=SW_HIDE;
+
+ if (use_stdout_and_stderror==true)
+ {
+  HANDLE hStdOutput=GetStdHandle(STD_OUTPUT_HANDLE);
+  HANDLE hStdError=GetStdHandle(STD_ERROR_HANDLE);
+
+  DuplicateHandle(GetCurrentProcess(),hStdOutput,GetCurrentProcess(),&duplicate_hStdOutput,0,TRUE,DUPLICATE_SAME_ACCESS);
+  DuplicateHandle(GetCurrentProcess(),hStdError,GetCurrentProcess(),&duplicate_hStdError,0,TRUE,DUPLICATE_SAME_ACCESS);
+  
+  si.dwFlags|=STARTF_USESTDHANDLES;
+  si.hStdOutput=duplicate_hStdOutput;
+  si.hStdInput=GetStdHandle(STD_INPUT_HANDLE);
+  si.hStdError=duplicate_hStdError;
+ }
+
+ std::string file_name=name;
+ file_name+=" ";
+ file_name+=param;
+  
+ if (CreateProcess(NULL,const_cast<char *>(file_name.c_str()),NULL,NULL,TRUE,CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi)==FALSE)
+ {  
+  if (duplicate_hStdOutput!=INVALID_HANDLE_VALUE) CloseHandle(duplicate_hStdOutput);
+  if (duplicate_hStdError!=INVALID_HANDLE_VALUE) CloseHandle(duplicate_hStdError);  
+  fprintf(stderr,"Can not execute %s\r\n",name);
+  return(EXIT_FAILURE);
+ }
+ 
+ if (pi.hProcess!=INVALID_HANDLE_VALUE)
  {
   DWORD dwExitCode=STILL_ACTIVE;
   while (dwExitCode==STILL_ACTIVE)
   {
-   WaitForSingleObject(hProcess,1000);
-   GetExitCodeProcess(hProcess,&dwExitCode);
-   return(dwExitCode);
+   WaitForSingleObject(pi.hProcess,1000);
+   GetExitCodeProcess(pi.hProcess,&dwExitCode);
   }
+  CloseHandle(pi.hProcess);
+  if (duplicate_hStdOutput!=INVALID_HANDLE_VALUE) CloseHandle(duplicate_hStdOutput);
+  if (duplicate_hStdError!=INVALID_HANDLE_VALUE) CloseHandle(duplicate_hStdError);  
+  return(dwExitCode);
  }
- return(0);
+ 
+ if (duplicate_hStdOutput!=INVALID_HANDLE_VALUE) CloseHandle(duplicate_hStdOutput);
+ if (duplicate_hStdError!=INVALID_HANDLE_VALUE) CloseHandle(duplicate_hStdError); 
+ fprintf(stderr,"Can not execute %s\r\n",name);
+ return(EXIT_FAILURE);
 }
 
 
@@ -167,7 +203,7 @@ DWORD Execute(const char *name,const char *param,const char *directory)
 //----------------------------------------------------------------------------------------------------
 bool ProcessingCFiles(const std::string &path,const std::string &mask,const std::string &ac30_file_name,const std::string &include_file_name)
 {
- printf("Compilation c-file.\r\n");
+ printf("Compilation %s-file.\r\n",mask.c_str());
 
  std::vector<std::string> file_array;
  //компилируем c-файлы
@@ -175,25 +211,31 @@ bool ProcessingCFiles(const std::string &path,const std::string &mask,const std:
  bool no_error=true;
  auto output_c_func=[&](const std::string &str)
  {
-  std::string file_name=str+mask;
-  printf("compilation %s\r\n",file_name.c_str());
+  std::string file_name="\""+str+mask+"\"";
+  fprintf(stdout,"****************************************************************************************************\r\n");
+  fprintf(stdout,"compilation %s\r\n",file_name.c_str());
+  fprintf(stdout,"****************************************************************************************************\r\n");
   std::string param="-i"+include_file_name+" -k -v30 -als -fr ";
   param+=file_name;
-  Execute(ac30_file_name.c_str(),param.c_str(),str.c_str());
+  if (Execute(ac30_file_name.c_str(),param.c_str(),str.c_str(),false)!=EXIT_SUCCESS) no_error=false;
+  
   //выводим err-файл, если он есть
   std::string err_file_name=str+".err";
   FILE *file=fopen(err_file_name.c_str(),"rb");
   if (file!=NULL)
   {
+   fprintf(stdout,"ERROR!\r\n \r\n");
    no_error=false;   
-   while(1)
+   while(true)
    {
     char b;
 	if (fread(&b,sizeof(char),1,file)==0) break;
-	fprintf(stderr,"%c",b);
+	fprintf(stdout,"%c",b);
    }
    fclose(file);
   }
+  else fprintf(stdout,"ok.\r\n");
+  fprintf(stdout," \r\n");
  }; 
  std::for_each(file_array.begin(),file_array.end(),output_c_func);
  return(no_error);
@@ -207,15 +249,16 @@ bool ProcessingIFFiles(const std::string &path,const std::string &opt30_file_nam
 
  std::vector<std::string> file_array;
  ProcessingFile(path,"*.if",file_array);
+ bool no_error=true;
 
  auto output_if_func=[&](const std::string &str)
  {
-  std::string file_name=str+".if";
+  std::string file_name="\""+str+".if\"";
   printf("optimize %s\r\n",file_name.c_str());
-  Execute(opt30_file_name.c_str(),file_name.c_str(),str.c_str());
+  if (Execute(opt30_file_name.c_str(),file_name.c_str(),str.c_str(),false)!=EXIT_SUCCESS) no_error=false;
  }; 
  std::for_each(file_array.begin(),file_array.end(),output_if_func);
- return(true);
+ return(no_error);
 }
 //----------------------------------------------------------------------------------------------------
 //обработка opt-файлов
@@ -226,15 +269,16 @@ bool ProcessingOPTFiles(const std::string &path,const std::string &cg30_file_nam
 
  std::vector<std::string> file_array;
  ProcessingFile(path,"*.opt",file_array);
+ bool no_error=true;
 
  auto output_opt_func=[&](const std::string &str)
  {
-  std::string file_name=str+".opt";
+  std::string file_name="\""+str+".opt\"";
   printf("create asm %s\r\n",file_name.c_str());
-  Execute(cg30_file_name.c_str(),file_name.c_str(),str.c_str());
+  if (Execute(cg30_file_name.c_str(),file_name.c_str(),str.c_str(),false)!=EXIT_SUCCESS) no_error=false;
  }; 
  std::for_each(file_array.begin(),file_array.end(),output_opt_func);
- return(true);
+ return(no_error);
 }
 //----------------------------------------------------------------------------------------------------
 //обработка asm-файлов
@@ -244,17 +288,18 @@ bool ProcessingASMFiles(const std::string &path,const std::string &asm30_file_na
  printf("Compile asm-file.\r\n");
  std::vector<std::string> file_array;
  ProcessingFile(path,"*.asm",file_array);
+ bool no_error=true;
 
  auto output_asm_func=[&](const std::string &str)
  {
-  std::string file_name=str+".asm";
+  std::string file_name="\""+str+".asm\"";
   printf("create obj %s\r\n",file_name.c_str());
   std::string param="-ls -v30 ";
   param+=file_name;
-  Execute(asm30_file_name.c_str(),param.c_str(),str.c_str());
+  if (Execute(asm30_file_name.c_str(),param.c_str(),str.c_str(),false)!=EXIT_SUCCESS) no_error=false;
  }; 
  std::for_each(file_array.begin(),file_array.end(),output_asm_func);
- return(true);
+ return(no_error);
 }
 //----------------------------------------------------------------------------------------------------
 //обработка obj-файлов
@@ -269,7 +314,7 @@ bool ProcessingOBJFiles(const std::string &path,const std::string &lnk30_file_na
  std::string obj_list;
  auto output_obj_func=[&](const std::string &str)
  {
-  std::string file_name=str+".obj";
+  std::string file_name="\""+str+".obj\"";
   obj_list+=file_name+" ";
  }; 
  std::for_each(file_array.begin(),file_array.end(),output_obj_func);
@@ -280,6 +325,6 @@ bool ProcessingOBJFiles(const std::string &path,const std::string &lnk30_file_na
  param+=obj_list;
  param+=" c30.cmd";
 
- if (Execute(lnk30_file_name.c_str(),param.c_str(),path.c_str())!=0) return(false);
+ if (Execute(lnk30_file_name.c_str(),param.c_str(),path.c_str(),true)!=EXIT_SUCCESS) return(false);
  return(true);
 }
