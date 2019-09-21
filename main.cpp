@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <stdint.h>
 
 //------------------------------------------------------------------------------
 bool Processing(void);//запустить на выполнение
@@ -17,6 +18,7 @@ bool ProcessingIFFiles(const std::string &path,const std::string &opt30_file_nam
 bool ProcessingOPTFiles(const std::string &path,const std::string &cg30_file_name);//обработка opt-файлов
 bool ProcessingASMFiles(const std::string &path,const std::string &asm30_file_name);//обработка asm-файлов
 bool ProcessingOBJFiles(const std::string &path,const std::string &lnk30_file_name,const std::string &libs_file_name);//обработка obj-файлов
+bool ProcessingOUTFiles(const std::string &path);//обработка out-файлов
 
 //----------------------------------------------------------------------------------------------------
 //главная функция программы
@@ -44,7 +46,13 @@ bool Processing(void)
  std::string output_file_name=path;
  output_file_name+="\\out.out";
  DeleteFile(output_file_name.c_str());
-
+ std::string output_dat_file_name=path;
+ output_dat_file_name+="\\out.dat";
+ DeleteFile(output_dat_file_name.c_str());
+ std::string output_dat_crc_file_name=path;
+ output_dat_crc_file_name+="\\out-crc.dat";
+ DeleteFile(output_dat_crc_file_name.c_str());
+ 
  //узнаем каталог инструментария
  char module_file_name[MAX_PATH];
  GetModuleFileName(GetModuleHandle(NULL),module_file_name,MAX_PATH);
@@ -59,13 +67,15 @@ bool Processing(void)
  std::string cg30_file_name="\""+tools_file_name+"bin\\cg30.exe"+"\"";
  std::string asm30_file_name="\""+tools_file_name+"bin\\asm30.exe"+"\"";
  std::string lnk30_file_name="\""+tools_file_name+"bin\\lnk30.exe"+"\"";
- 
+
  if (ProcessingCFiles(path,".c",ac30_file_name,include_file_name)==false) return(false);
  if (ProcessingCFiles(path,".cc",ac30_file_name,include_file_name)==false) return(false);
  if (ProcessingIFFiles(path,opt30_file_name)==false) return(false);
  if (ProcessingOPTFiles(path,cg30_file_name)==false) return(false);
  if (ProcessingASMFiles(path,asm30_file_name)==false) return(false);
  if (ProcessingOBJFiles(path,lnk30_file_name,libs_file_name)==false) return(false);
+
+ if (ProcessingOUTFiles(path)==false) return(false);
  return(true);
 }
 
@@ -326,5 +336,155 @@ bool ProcessingOBJFiles(const std::string &path,const std::string &lnk30_file_na
  param+=" c30.cmd";
 
  if (Execute(lnk30_file_name.c_str(),param.c_str(),path.c_str(),true)!=EXIT_SUCCESS) return(false);
+ return(true);
+}
+
+//----------------------------------------------------------------------------------------------------
+//обработка out-файлов
+//----------------------------------------------------------------------------------------------------
+bool ProcessingOUTFiles(const std::string &path)
+{
+ printf("Create dat-file.\r\n");
+ std::vector<uint8_t> out_file_data;
+ FILE *file_out=fopen((path+"\\out.out").c_str(),"rb");
+ if (file_out==NULL)
+ {
+  printf("Error open out.out!\r\n");
+  return(false);
+ }
+ while(1)
+ {
+  uint8_t s;
+  if (fread(&s,sizeof(uint8_t),1,file_out)==0) break;
+  out_file_data.push_back(s);
+ }
+ fclose(file_out);
+
+ //ищем секцию данных и секцию загрузчика
+ std::vector<uint8_t> data_section_name;
+ data_section_name.push_back('.');
+ data_section_name.push_back('d');
+ data_section_name.push_back('a');
+ data_section_name.push_back('t');
+ data_section_name.push_back('a');
+
+ std::vector<uint8_t> boot_section_name;
+ boot_section_name.push_back('b');
+ boot_section_name.push_back('o');
+ boot_section_name.push_back('o');
+ boot_section_name.push_back('t');
+ boot_section_name.push_back('.');
+ boot_section_name.push_back('a');
+ boot_section_name.push_back('s');
+ boot_section_name.push_back('m');
+
+ std::vector<uint8_t>::iterator iterator_data_section=std::search(out_file_data.begin(),out_file_data.end(),data_section_name.begin(),data_section_name.end());
+ if (iterator_data_section==out_file_data.end())
+ {
+  printf("Error find .data section in out.out file!\r\n");
+  return(false);
+ }
+ std::vector<uint8_t>::iterator iterator_boot_section=std::search(out_file_data.begin(),out_file_data.end(),boot_section_name.begin(),boot_section_name.end());
+ if (iterator_boot_section==out_file_data.end())
+ {
+  printf("Error find boot.asm section in out.out file!\r\n");
+  return(false);
+ }
+
+ std::vector<uint8_t> dat_file_data;
+
+ size_t size_dat_file=0;
+ iterator_data_section+=48;//перемещаемся к первому байту данных 
+ size_t counter=11*4;//почему-то такой размер заголовка
+ while(iterator_data_section<iterator_boot_section && counter>0)
+ {
+  uint8_t b;
+  b=*iterator_data_section;
+  iterator_data_section++;
+  counter--;
+  size_dat_file+=sizeof(uint8_t);
+  dat_file_data.push_back(b);
+ }
+ //непонятная секция (адреса прерываний?)
+ uint32_t l1=0xFB000002;
+ uint32_t l2=0xFB000100;
+ for(size_t n=0;n<26;n++)
+ {
+  size_dat_file+=sizeof(uint32_t);
+  dat_file_data.push_back((l1>>0)&0xff);
+  dat_file_data.push_back((l1>>8)&0xff);
+  dat_file_data.push_back((l1>>16)&0xff);
+  dat_file_data.push_back((l1>>24)&0xff);
+
+  size_dat_file+=sizeof(uint32_t);
+  dat_file_data.push_back((l2>>0)&0xff);
+  dat_file_data.push_back((l2>>8)&0xff);
+  dat_file_data.push_back((l2>>16)&0xff);
+  dat_file_data.push_back((l2>>24)&0xff);
+ }
+ size_dat_file+=sizeof(uint32_t);
+ dat_file_data.push_back((l1>>0)&0xff);
+ dat_file_data.push_back((l1>>8)&0xff);
+ dat_file_data.push_back((l1>>16)&0xff);
+ dat_file_data.push_back((l1>>24)&0xff);
+
+ //данные
+ while(iterator_data_section<iterator_boot_section)
+ {
+  uint8_t b;
+  b=*iterator_data_section;
+  iterator_data_section++;
+  size_dat_file+=sizeof(uint8_t);
+  dat_file_data.push_back(b);
+ }
+ //дозаписываем файл
+ while(size_dat_file<65536-sizeof(uint32_t))
+ {
+  uint8_t b=0;
+  size_dat_file+=sizeof(uint8_t);
+  dat_file_data.push_back(b);
+ }
+ //считаем контрольную сумму и создаём файл с ней
+ //создаём dat-файл
+ FILE *file_dat=fopen((path+"\\out.dat").c_str(),"wb");
+ if (file_dat==NULL)
+ {
+  printf("Error create out.dat!\r\n");
+  return(false);
+ }
+
+ FILE *file_crc_dat=fopen((path+"\\out-crc.dat").c_str(),"wb");
+ if (file_crc_dat==NULL)
+ {
+  printf("Error create out-crc.dat!\r\n");
+  fclose(file_dat);
+  return(false);
+ }
+ fprintf(file_crc_dat,"1651 1 1000 0 4000\r\n");
+ fprintf(file_dat,"1651 1 0 0 3fff\r\n");
+ uint32_t crc=0;
+ size_t size=dat_file_data.size();
+ for(size_t n=0;n<size;)
+ {
+  uint32_t b0=dat_file_data[n++];
+  uint32_t b1=dat_file_data[n++];
+  uint32_t b2=dat_file_data[n++];
+  uint32_t b3=dat_file_data[n++];
+
+  uint32_t word=0;
+  word<<=8;word+=b3;
+  word<<=8;word+=b2;
+  word<<=8;word+=b1;
+  word<<=8;word+=b0;
+
+  crc+=word;
+
+  fprintf(file_crc_dat,"0x%08x\r\n",word);
+  fprintf(file_dat,"0x%08x\r\n",word);
+ }
+ fprintf(file_crc_dat,"0x%08x\r\n",crc);
+ fclose(file_dat);
+ fclose(file_crc_dat);
+ printf("CRC: 0x%08x\r\n",crc);
  return(true);
 }
