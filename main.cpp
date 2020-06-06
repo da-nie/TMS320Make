@@ -437,13 +437,62 @@ bool ProcessingOUTFiles(const std::string &path)
   size_dat_file+=sizeof(uint8_t);
   dat_file_data.push_back(b);
  }
- //дозаписываем файл
- while(size_dat_file<65536-sizeof(uint32_t))
+ //формируем дату и время файла
+ SYSTEMTIME systemtime;
+ GetLocalTime(&systemtime);
+ static const size_t STRING_BUFFER_SIZE=255;
+ char date[STRING_BUFFER_SIZE];
+ char time[STRING_BUFFER_SIZE];
+ sprintf(date,"%02i%02i%04i",systemtime.wDay,systemtime.wMonth,systemtime.wYear);
+ sprintf(time,"%02iE%02iE%02i",systemtime.wHour,systemtime.wMinute,systemtime.wSecond);
+
+ auto string_convert=[](const char *string)->uint32_t
  {
-  uint8_t b=0;
+  size_t length=strlen(string);
+  uint32_t value=0;
+  for(size_t n=0;n<length;n++)
+  {
+   value<<=4;
+   unsigned char s=string[n];
+   if (s>='0' && s<='9') value|=s-'0';
+   if (s>='A' && s<='F') value|=s-'A'+0x0A;
+   if (s>='a' && s<='f') value|=s-'a'+0x0A;
+  }
+  return(value);
+ };
+
+ uint32_t date_value=string_convert(date);
+ uint32_t time_value=string_convert(time);
+
+ printf("Date:%s (0x%08x)\r\n",date,date_value);
+ printf("Time:%s (0x%08x)\r\n",time,time_value);
+ 
+ //дозаписываем файл
+ static const size_t END_WORD_AMOUNT=4;//количество слов в конце
+ while(size_dat_file<65536-sizeof(uint32_t)*END_WORD_AMOUNT)
+ {
+  uint8_t b=0xff;
   size_dat_file+=sizeof(uint8_t);
   dat_file_data.push_back(b);
  }
+ //добавляем дату
+ dat_file_data.push_back((date_value>>0)&0xff);
+ dat_file_data.push_back((date_value>>8)&0xff);
+ dat_file_data.push_back((date_value>>16)&0xff);
+ dat_file_data.push_back((date_value>>24)&0xff);
+ 
+ //добавляем время
+ dat_file_data.push_back((time_value>>0)&0xff);
+ dat_file_data.push_back((time_value>>8)&0xff);
+ dat_file_data.push_back((time_value>>16)&0xff);
+ dat_file_data.push_back((time_value>>24)&0xff);
+
+ //добавляем строку с нулями
+ dat_file_data.push_back(0xff);
+ dat_file_data.push_back(0xff);
+ dat_file_data.push_back(0xff);
+ dat_file_data.push_back(0xff);
+ 
  //считаем контрольную сумму и создаём файл с ней
  //создаём dat-файл
  FILE *file_dat=fopen((path+"\\out.dat").c_str(),"wb");
@@ -460,6 +509,247 @@ bool ProcessingOUTFiles(const std::string &path)
   fclose(file_dat);
   return(false);
  }
+
+ FILE *file_full_crc_dat=fopen((path+"\\full-out-crc.dat").c_str(),"wb");
+ if (file_full_crc_dat==NULL)
+ {
+  printf("Error create out-crc.dat!\r\n");
+  fclose(file_dat);
+  fclose(file_full_crc_dat);
+  return(false);
+ }
+
+ fprintf(file_full_crc_dat,"1651 1 0000 0 5000\r\n");
+ fprintf(file_full_crc_dat,"0x00000019\r\n");
+ fprintf(file_full_crc_dat,"0x0000000C\r\n");
+ fprintf(file_full_crc_dat,"0x00808060\r\n");
+ fprintf(file_full_crc_dat,"0xFFFFFFFF\r\n");
+ fprintf(file_full_crc_dat,"0xFFFFFFFF\r\n");
+ fprintf(file_full_crc_dat,"0xFFFFFFFF\r\n");
+ fprintf(file_full_crc_dat,"0xFFFFFFFF\r\n");
+ fprintf(file_full_crc_dat,"0xFFFFFFFF\r\n");
+ fprintf(file_full_crc_dat,"0xFFFFFFFF\r\n");
+ fprintf(file_full_crc_dat,"0xFFFFFFFF\r\n");
+ fprintf(file_full_crc_dat,"0xFFFFFFFF\r\n");
+ fprintf(file_full_crc_dat,"0xFFFFFFFF\r\n");
+ fprintf(file_full_crc_dat,"0x0F350000\r\n");
+ fprintf(file_full_crc_dat,"0x0F2B0000\r\n");
+ fprintf(file_full_crc_dat,"0x500B0014\r\n");
+ fprintf(file_full_crc_dat,"0x0F200000\r\n");
+ fprintf(file_full_crc_dat,"0x0FA00000\r\n");
+ fprintf(file_full_crc_dat,"0x50600001\r\n");
+ fprintf(file_full_crc_dat,"0x02200007\r\n");
+ fprintf(file_full_crc_dat,"0x15200007\r\n");
+ fprintf(file_full_crc_dat,"0x0EA00000\r\n");
+ fprintf(file_full_crc_dat,"0x0E200000\r\n");
+ fprintf(file_full_crc_dat,"0x0E2B0000\r\n");
+ fprintf(file_full_crc_dat,"0x0E350000\r\n");
+ fprintf(file_full_crc_dat,"0x78000000\r\n");
+ fprintf(file_full_crc_dat,"0x0F2B0000\r\n");
+ fprintf(file_full_crc_dat,"0x500B0014\r\n");
+ fprintf(file_full_crc_dat,"0x5060006E\r\n");
+ fprintf(file_full_crc_dat,"0x15200004\r\n");
+ fprintf(file_full_crc_dat,"0x50600000\r\n");
+ fprintf(file_full_crc_dat,"0x15200007\r\n");
+ fprintf(file_full_crc_dat,"0x15200008\r\n");
+ fprintf(file_full_crc_dat,"0x50601000\r\n");
+ fprintf(file_full_crc_dat,"0x1520000B\r\n");
+ fprintf(file_full_crc_dat,"0x08770000\r\n");
+ fprintf(file_full_crc_dat,"0x10760003\r\n");
+ fprintf(file_full_crc_dat,"0x10752000\r\n");
+ fprintf(file_full_crc_dat,"0x50280002\r\n");
+ fprintf(file_full_crc_dat,"0x506000F8\r\n");
+ fprintf(file_full_crc_dat,"0x1540C000\r\n");
+ fprintf(file_full_crc_dat,"0x62000084\r\n");
+ fprintf(file_full_crc_dat,"0x50600000\r\n");
+ fprintf(file_full_crc_dat,"0x15200008\r\n");
+ fprintf(file_full_crc_dat,"0x50200008\r\n");
+ fprintf(file_full_crc_dat,"0x04E07530\r\n");
+ fprintf(file_full_crc_dat,"0x6A040006\r\n");
+ fprintf(file_full_crc_dat,"0x50600001\r\n");
+ fprintf(file_full_crc_dat,"0x02200008\r\n");
+ fprintf(file_full_crc_dat,"0x15200008\r\n");
+ fprintf(file_full_crc_dat,"0x50200008\r\n");
+ fprintf(file_full_crc_dat,"0x04E07530\r\n");
+ fprintf(file_full_crc_dat,"0x6A01FFFA\r\n");
+ fprintf(file_full_crc_dat,"0x62000039\r\n");
+ fprintf(file_full_crc_dat,"0x50600001\r\n");
+ fprintf(file_full_crc_dat,"0x02200004\r\n");
+ fprintf(file_full_crc_dat,"0x15200004\r\n");
+ fprintf(file_full_crc_dat,"0x6A00FFFC\r\n");
+ fprintf(file_full_crc_dat,"0x0F2B0000\r\n");
+ fprintf(file_full_crc_dat,"0x500B0014\r\n");
+ fprintf(file_full_crc_dat,"0x50600000\r\n");
+ fprintf(file_full_crc_dat,"0x15200009\r\n");
+ fprintf(file_full_crc_dat,"0x50600020\r\n");
+ fprintf(file_full_crc_dat,"0x15200006\r\n");
+ fprintf(file_full_crc_dat,"0x50600000\r\n");
+ fprintf(file_full_crc_dat,"0x15200008\r\n");
+ fprintf(file_full_crc_dat,"0x50200008\r\n");
+ fprintf(file_full_crc_dat,"0x04E04000\r\n");
+ fprintf(file_full_crc_dat,"0x6A04003C\r\n");
+ fprintf(file_full_crc_dat,"0x50200008\r\n");
+ fprintf(file_full_crc_dat,"0x1520000A\r\n");
+ fprintf(file_full_crc_dat,"0x5031000B\r\n");
+ fprintf(file_full_crc_dat,"0x50280008\r\n");
+ fprintf(file_full_crc_dat,"0x50404000\r\n");
+ fprintf(file_full_crc_dat,"0x15200003\r\n");
+ fprintf(file_full_crc_dat,"0x0F290000\r\n");
+ fprintf(file_full_crc_dat,"0x0F2A0000\r\n");
+ fprintf(file_full_crc_dat,"0x0F200000\r\n");
+ fprintf(file_full_crc_dat,"0x08690020\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x10690555\r\n");
+ fprintf(file_full_crc_dat,"0x0860AAAA\r\n");
+ fprintf(file_full_crc_dat,"0x09E00010\r\n");
+ fprintf(file_full_crc_dat,"0x1060AAAA\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x08690020\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x106902AA\r\n");
+ fprintf(file_full_crc_dat,"0x08605555\r\n");
+ fprintf(file_full_crc_dat,"0x09E00010\r\n");
+ fprintf(file_full_crc_dat,"0x10605555\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x08690020\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x10690555\r\n");
+ fprintf(file_full_crc_dat,"0x0860A0A0\r\n");
+ fprintf(file_full_crc_dat,"0x09E00010\r\n");
+ fprintf(file_full_crc_dat,"0x1060A0A0\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x08700000\r\n");
+ fprintf(file_full_crc_dat,"0x082A0006\r\n");
+ fprintf(file_full_crc_dat,"0x0809000A\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x08700000\r\n");
+ fprintf(file_full_crc_dat,"0x082A000A\r\n");
+ fprintf(file_full_crc_dat,"0x1009000A\r\n");
+ fprintf(file_full_crc_dat,"0x08700000\r\n");
+ fprintf(file_full_crc_dat,"0x08200003\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x50600000\r\n");
+ fprintf(file_full_crc_dat,"0x15200009\r\n");
+ fprintf(file_full_crc_dat,"0x50200009\r\n");
+ fprintf(file_full_crc_dat,"0x04E00064\r\n");
+ fprintf(file_full_crc_dat,"0x6A040006\r\n");
+ fprintf(file_full_crc_dat,"0x50600001\r\n");
+ fprintf(file_full_crc_dat,"0x02200009\r\n");
+ fprintf(file_full_crc_dat,"0x15200009\r\n");
+ fprintf(file_full_crc_dat,"0x50200009\r\n");
+ fprintf(file_full_crc_dat,"0x04E00064\r\n");
+ fprintf(file_full_crc_dat,"0x6A01FFFA\r\n");
+ fprintf(file_full_crc_dat,"0x0E200000\r\n");
+ fprintf(file_full_crc_dat,"0x0E2A0000\r\n");
+ fprintf(file_full_crc_dat,"0x0E290000\r\n");
+ fprintf(file_full_crc_dat,"0x50600001\r\n");
+ fprintf(file_full_crc_dat,"0x02200008\r\n");
+ fprintf(file_full_crc_dat,"0x15200008\r\n");
+ fprintf(file_full_crc_dat,"0x50200008\r\n");
+ fprintf(file_full_crc_dat,"0x04E04000\r\n");
+ fprintf(file_full_crc_dat,"0x6A01FFC4\r\n");
+ fprintf(file_full_crc_dat,"0x50410B01\r\n");
+ fprintf(file_full_crc_dat,"0x504BC300\r\n");
+ fprintf(file_full_crc_dat,"0x18740002\r\n");
+ fprintf(file_full_crc_dat,"0x68000001\r\n");
+ fprintf(file_full_crc_dat,"0x0F2B0000\r\n");
+ fprintf(file_full_crc_dat,"0x500B0014\r\n");
+ fprintf(file_full_crc_dat,"0x0F290000\r\n");
+ fprintf(file_full_crc_dat,"0x0F2A0000\r\n");
+ fprintf(file_full_crc_dat,"0x0F200000\r\n");
+ fprintf(file_full_crc_dat,"0x08690020\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x10690555\r\n");
+ fprintf(file_full_crc_dat,"0x0860AAAA\r\n");
+ fprintf(file_full_crc_dat,"0x09E00010\r\n");
+ fprintf(file_full_crc_dat,"0x1060AAAA\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x08690020\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x106902AA\r\n");
+ fprintf(file_full_crc_dat,"0x08605555\r\n");
+ fprintf(file_full_crc_dat,"0x09E00010\r\n");
+ fprintf(file_full_crc_dat,"0x10605555\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x08690020\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x10690555\r\n");
+ fprintf(file_full_crc_dat,"0x08608080\r\n");
+ fprintf(file_full_crc_dat,"0x09E00010\r\n");
+ fprintf(file_full_crc_dat,"0x10608080\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x08690020\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x10690555\r\n");
+ fprintf(file_full_crc_dat,"0x0860AAAA\r\n");
+ fprintf(file_full_crc_dat,"0x09E00010\r\n");
+ fprintf(file_full_crc_dat,"0x1060AAAA\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x08690020\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x106902AA\r\n");
+ fprintf(file_full_crc_dat,"0x08605555\r\n");
+ fprintf(file_full_crc_dat,"0x09E00010\r\n");
+ fprintf(file_full_crc_dat,"0x10605555\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x08690020\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x10690000\r\n");
+ fprintf(file_full_crc_dat,"0x08603030\r\n");
+ fprintf(file_full_crc_dat,"0x09E00010\r\n");
+ fprintf(file_full_crc_dat,"0x10603030\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x0E200000\r\n");
+ fprintf(file_full_crc_dat,"0x0E2A0000\r\n");
+ fprintf(file_full_crc_dat,"0x0E290000\r\n");
+ fprintf(file_full_crc_dat,"0x50600000\r\n");
+ fprintf(file_full_crc_dat,"0x15200008\r\n");
+ fprintf(file_full_crc_dat,"0x50200008\r\n");
+ fprintf(file_full_crc_dat,"0x04E003E8\r\n");
+ fprintf(file_full_crc_dat,"0x6A040006\r\n");
+ fprintf(file_full_crc_dat,"0x50600001\r\n");
+ fprintf(file_full_crc_dat,"0x02200008\r\n");
+ fprintf(file_full_crc_dat,"0x15200008\r\n");
+ fprintf(file_full_crc_dat,"0x50200008\r\n");
+ fprintf(file_full_crc_dat,"0x04E003E8\r\n");
+ fprintf(file_full_crc_dat,"0x6A01FFFA\r\n");
+ fprintf(file_full_crc_dat,"0x50410B01\r\n");
+ fprintf(file_full_crc_dat,"0x504BC300\r\n");
+ fprintf(file_full_crc_dat,"0x18740002\r\n");
+ fprintf(file_full_crc_dat,"0x68000001\r\n");
+ fprintf(file_full_crc_dat,"0x0F2B0000\r\n");
+ fprintf(file_full_crc_dat,"0x500B0014\r\n");
+ fprintf(file_full_crc_dat,"0x50400B02\r\n");
+ fprintf(file_full_crc_dat,"0x15200006\r\n");
+ fprintf(file_full_crc_dat,"0x50400B04\r\n");
+ fprintf(file_full_crc_dat,"0x02400B03\r\n");
+ fprintf(file_full_crc_dat,"0x1520000A\r\n");
+ fprintf(file_full_crc_dat,"0x50400B05\r\n");
+ fprintf(file_full_crc_dat,"0x15200003\r\n");
+ fprintf(file_full_crc_dat,"0x0F290000\r\n");
+ fprintf(file_full_crc_dat,"0x0F2A0000\r\n");
+ fprintf(file_full_crc_dat,"0x0F200000\r\n");
+ fprintf(file_full_crc_dat,"0x08700000\r\n");
+ fprintf(file_full_crc_dat,"0x082A0006\r\n");
+ fprintf(file_full_crc_dat,"0x0809000A\r\n");
+ fprintf(file_full_crc_dat,"0x09E90010\r\n");
+ fprintf(file_full_crc_dat,"0x08700000\r\n");
+ fprintf(file_full_crc_dat,"0x082A000A\r\n");
+ fprintf(file_full_crc_dat,"0x1009000A\r\n");
+ fprintf(file_full_crc_dat,"0x08700000\r\n");
+ fprintf(file_full_crc_dat,"0x08200003\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x1540C100\r\n");
+ fprintf(file_full_crc_dat,"0x0E200000\r\n");
+ fprintf(file_full_crc_dat,"0x0E2A0000\r\n");
+ fprintf(file_full_crc_dat,"0x0E290000\r\n");
+ fprintf(file_full_crc_dat,"0x50410B01\r\n");
+ fprintf(file_full_crc_dat,"0x504BC300\r\n");
+ fprintf(file_full_crc_dat,"0x18740002\r\n");
+ fprintf(file_full_crc_dat,"0x68000001\r\n");
+
+ for(size_t n=0;n<0x1000-227;n++) fprintf(file_full_crc_dat,"0xFFFFFFFF\r\n");
+ 
  fprintf(file_crc_dat,"1651 1 1000 0 4000\r\n");
  fprintf(file_dat,"1651 1 0 0 3fff\r\n");
  uint32_t crc=0;
@@ -481,10 +771,13 @@ bool ProcessingOUTFiles(const std::string &path)
 
   fprintf(file_crc_dat,"0x%08x\r\n",word);
   fprintf(file_dat,"0x%08x\r\n",word);
+  fprintf(file_full_crc_dat,"0x%08x\r\n",word);
  }
  fprintf(file_crc_dat,"0x%08x\r\n",crc);
+ fprintf(file_full_crc_dat,"0x%08x\r\n",crc);
  fclose(file_dat);
  fclose(file_crc_dat);
+ fclose(file_full_crc_dat);
  printf("CRC: 0x%08x\r\n",crc);
  return(true);
 }
